@@ -14,7 +14,7 @@ from .lexer import Lexer
 from .parser import Parser
 from .types import UzonEnum, UzonFloat, UzonInt, UzonTaggedUnion, UzonUndefined, UzonUnion
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     # Core API

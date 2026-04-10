@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "uzon"
-version = "0.3.0"
+version = "0.4.0"
 description = "Parse and generate UZON data format"
 readme = "README.md"
 license = "MIT"
