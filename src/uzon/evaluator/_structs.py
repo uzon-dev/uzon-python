@@ -16,7 +16,7 @@ from ..ast_nodes import (
     AreBinding, Binding, MemberAccess, Node, SelfRef, EnvRef,
     StructImport, StructLiteral, StructExtension, StructOverride,
 )
-from ..errors import UzonCircularError, UzonRuntimeError, UzonTypeError
+from ..errors import UzonCircularError, UzonError, UzonRuntimeError, UzonTypeError
 from ..scope import Scope
 from ..types import UzonFloat, UzonInt, UzonTaggedUnion, UzonUndefined
 from ._constants import INT_TYPE_RE
@@ -299,19 +299,31 @@ class StructMixin:
                 file=self._filename,
             )
         source = open(resolved, encoding="utf-8").read()
-        tokens = Lexer(source).tokenize()
-        doc = Parser(tokens).parse()
 
         self._import_stack.append(resolved)
         old_filename = self._filename
         self._filename = resolved
         try:
+            tokens = Lexer(source).tokenize()
+            doc = Parser(tokens).parse()
             scope = Scope()
             scope.define("std", self._build_std())
             self._evaluate_bindings(doc.bindings, scope)
             result = scope.to_dict()
             result.pop("std", None)
             self._scope_of[id(result)] = scope
+        except UzonError as e:
+            # Build import chain stack trace
+            parts: list[str] = []
+            if old_filename != "<string>":
+                parts.append(f"File {old_filename}")
+            else:
+                parts.append("<string>")
+            if node.line is not None and node.col is not None:
+                parts.append(f"Line {node.line}, col {node.col}")
+            elif node.line is not None:
+                parts.append(f"Line {node.line}")
+            raise type(e)(f"{e}\n  imported from {', '.join(parts)}") from None
         finally:
             self._filename = old_filename
             self._import_stack.pop()
