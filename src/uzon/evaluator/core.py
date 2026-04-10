@@ -30,11 +30,15 @@ from ._functions import FunctionMixin
 from ._operators import OperatorMixin
 from ._stdlib import StdlibMixin
 from ._structs import StructMixin
-from ._types import TypeMixin
+from ._type_annotation import TypeAnnotationMixin
+from ._type_checks import TypeChecksMixin
+from ._type_conversion import TypeConversionMixin
 
 
 class Evaluator(
-    TypeMixin,
+    TypeAnnotationMixin,
+    TypeConversionMixin,
+    TypeChecksMixin,
     OperatorMixin,
     ControlMixin,
     StructMixin,
