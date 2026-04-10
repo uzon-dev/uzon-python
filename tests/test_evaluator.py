@@ -738,6 +738,35 @@ class TestStructImportFromString:
         r = evaluate('o is struct "outer.uzon"')
         assert r["o"]["inner"]["val"] == 99
 
+    def test_import_chain_error_message(self, tmp_path, monkeypatch):
+        """Errors in imported files show import chain stack trace."""
+        (tmp_path / "bad.uzon").write_text("x is 1 + true", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(UzonTypeError) as exc_info:
+            evaluate('d is struct "bad.uzon"')
+        msg = str(exc_info.value)
+        assert "imported from" in msg
+
+    def test_import_chain_nested_error(self, tmp_path, monkeypatch):
+        """Nested import errors show full chain."""
+        (tmp_path / "bad.uzon").write_text("x is 1 + true", encoding="utf-8")
+        (tmp_path / "mid.uzon").write_text('b is struct "bad.uzon"', encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(UzonTypeError) as exc_info:
+            evaluate('d is struct "mid.uzon"')
+        msg = str(exc_info.value)
+        # Should have two levels of import chain
+        assert msg.count("imported from") == 2
+
+    def test_import_chain_shows_string_origin(self, tmp_path, monkeypatch):
+        """Import chain traces back to <string> origin."""
+        (tmp_path / "bad.uzon").write_text("x is 1 + true", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(UzonTypeError) as exc_info:
+            evaluate('d is struct "bad.uzon"')
+        msg = str(exc_info.value)
+        assert "<string>" in msg
+
     def test_import_not_found_from_string(self, tmp_path, monkeypatch):
         """File not found error still works from string context."""
         monkeypatch.chdir(tmp_path)
