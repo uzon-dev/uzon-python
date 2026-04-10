@@ -716,3 +716,38 @@ class TestUndefined:
     def test_undefined_member_access(self):
         r = evaluate("s is { a is 1 }\nx is self.s.missing or else 0")
         assert r["x"] == 0
+
+
+# ── Struct import from string (§7) ──────────────────────────────
+
+class TestStructImportFromString:
+    """§7: struct import should work when evaluating from a string (loads)."""
+
+    def test_import_from_string_uses_cwd(self, tmp_path, monkeypatch):
+        """struct import in loads() resolves paths relative to CWD."""
+        (tmp_path / "data.uzon").write_text("x is 42", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        r = evaluate('d is struct "data.uzon"')
+        assert r["d"]["x"] == 42
+
+    def test_import_from_string_nested(self, tmp_path, monkeypatch):
+        """Nested struct imports from string context."""
+        (tmp_path / "inner.uzon").write_text("val is 99", encoding="utf-8")
+        (tmp_path / "outer.uzon").write_text('inner is struct "inner.uzon"', encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        r = evaluate('o is struct "outer.uzon"')
+        assert r["o"]["inner"]["val"] == 99
+
+    def test_import_not_found_from_string(self, tmp_path, monkeypatch):
+        """File not found error still works from string context."""
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(UzonRuntimeError, match="Import file not found"):
+            evaluate('d is struct "nonexistent.uzon"')
+
+    def test_circular_import_from_string(self, tmp_path, monkeypatch):
+        """Circular import detection works from string context."""
+        (tmp_path / "a.uzon").write_text('b is struct "b.uzon"', encoding="utf-8")
+        (tmp_path / "b.uzon").write_text('a is struct "a.uzon"', encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(UzonCircularError, match="Circular import"):
+            evaluate('x is struct "a.uzon"')
