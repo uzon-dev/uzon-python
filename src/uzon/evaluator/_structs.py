@@ -1,0 +1,321 @@
+# SPDX-FileCopyrightText: © 2026 Suho Kang
+# SPDX-License-Identifier: MIT
+"""Struct and member access evaluation mixin.
+
+Implements §3.2 (struct literal), §3.2.1 (with — copy-and-update),
+§3.2.2 (extends — copy, override, and add), §5.12 (member access),
+§5.13 (env reference), and §7 (file import).
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from ..ast_nodes import (
+    AreBinding, Binding, MemberAccess, Node, SelfRef, EnvRef,
+    StructImport, StructLiteral, StructExtension, StructOverride,
+)
+from ..errors import UzonCircularError, UzonRuntimeError, UzonTypeError
+from ..scope import Scope
+from ..types import UzonFloat, UzonInt, UzonTaggedUnion, UzonUndefined
+from ._constants import INT_TYPE_RE
+
+
+class StructMixin:
+    """Struct and member access methods mixed into the Evaluator."""
+
+    # ── member access (§5.12, §5.13) ─────────────────────────────────
+
+    @staticmethod
+    def _deadopt(value: Any) -> Any:
+        """Strip adoptability from values retrieved via member access."""
+        if isinstance(value, UzonInt) and value.adoptable:
+            return UzonInt(int(value), value.type_name)
+        if isinstance(value, UzonFloat) and value.adoptable:
+            return UzonFloat(float(value), value.type_name)
+        return value
+
+    def _eval_member_access(
+        self, node: MemberAccess, scope: Scope, exclude: str | None
+    ) -> Any:
+        if isinstance(node.object, SelfRef):
+            self_scope = scope.self_scope
+            return self_scope.get(node.member, exclude=exclude)
+        if isinstance(node.object, EnvRef):
+            return os.environ.get(node.member, UzonUndefined)
+
+        obj = self._eval_node(node.object, scope, exclude)
+        if obj is UzonUndefined:
+            return UzonUndefined
+        if obj is None:
+            raise UzonTypeError(
+                "Member access on null — null is a value, not a missing state",
+                node.line, node.col, file=self._filename,
+            )
+        if isinstance(obj, dict):
+            return obj.get(node.member, UzonUndefined)
+        if isinstance(obj, (list, tuple)):
+            return self._access_indexed(obj, node.member)
+        if isinstance(obj, UzonTaggedUnion):
+            return self._access_tagged_union(obj, node.member)
+        return UzonUndefined
+
+    @staticmethod
+    def _access_indexed(obj: list | tuple, member: str) -> Any:
+        """Access a list/tuple by numeric index or named ordinal."""
+        try:
+            idx = int(member)
+            if 0 <= idx < len(obj):
+                return obj[idx]
+            return UzonUndefined
+        except ValueError:
+            pass
+        ordinals = {
+            "first": 0, "second": 1, "third": 2, "fourth": 3, "fifth": 4,
+            "sixth": 5, "seventh": 6, "eighth": 7, "ninth": 8, "tenth": 9,
+        }
+        idx = ordinals.get(member)
+        if idx is not None and 0 <= idx < len(obj):
+            return obj[idx]
+        return UzonUndefined
+
+    @staticmethod
+    def _access_tagged_union(obj: UzonTaggedUnion, member: str) -> Any:
+        """§3.7.1: Transparent member access on tagged union's inner value."""
+        inner = obj.value
+        if isinstance(inner, dict):
+            return inner.get(member, UzonUndefined)
+        if isinstance(inner, (list, tuple)):
+            try:
+                idx = int(member)
+                if 0 <= idx < len(inner):
+                    return inner[idx]
+                return UzonUndefined
+            except ValueError:
+                pass
+            ordinals = {
+                "first": 0, "second": 1, "third": 2, "fourth": 3, "fifth": 4,
+                "sixth": 5, "seventh": 6, "eighth": 7, "ninth": 8, "tenth": 9,
+            }
+            idx = ordinals.get(member)
+            if idx is not None and 0 <= idx < len(inner):
+                return inner[idx]
+        return UzonUndefined
+
+    # ── struct literal (§3.2) ────────────────────────────────────────
+
+    def _eval_struct_literal(self, node: StructLiteral, scope: Scope) -> dict[str, Any]:
+        """§3.2: Evaluate a struct literal into a dict with a child scope."""
+        child_scope = Scope(parent=scope)
+        self._evaluate_bindings(node.fields, child_scope)
+        result = child_scope.to_dict()
+        self._scope_of[id(result)] = child_scope
+        return result
+
+    # ── struct override (§3.2.1) ─────────────────────────────────────
+
+    def _eval_struct_override(
+        self, node: StructOverride, scope: Scope, exclude: str | None
+    ) -> dict[str, Any]:
+        """§3.2.1: Evaluate `base with { overrides }` — copy-and-update."""
+        base = self._eval_node(node.base, scope, exclude)
+        if base is UzonUndefined:
+            raise UzonRuntimeError(
+                "'with' requires a concrete struct, got undefined",
+                node.line, node.col, file=self._filename,
+            )
+        if isinstance(base, UzonTaggedUnion):
+            raise UzonTypeError(
+                "'with' requires a struct, not a tagged union — "
+                "apply 'with' to the inner struct explicitly",
+                node.line, node.col, file=self._filename,
+            )
+        if not isinstance(base, dict):
+            raise UzonTypeError(
+                f"'with' requires a struct, got {self._type_name(base)}",
+                node.line, node.col, file=self._filename,
+            )
+
+        override_scope = self._augment_scope_with_types(scope, base)
+        overrides: dict[str, Any] = {}
+
+        for field in node.overrides.fields:
+            name = field.name
+            if name not in base:
+                raise UzonRuntimeError(
+                    f"'with' override: field '{name}' does not exist in base struct",
+                    field.line, field.col, file=self._filename,
+                )
+            value = self._eval_field_value(field, override_scope, exclude)
+            if value is UzonUndefined:
+                raise UzonTypeError(
+                    f"'with' override: field '{name}' cannot be undefined",
+                    field.line, field.col, file=self._filename,
+                )
+            value = self._check_override_compat(base[name], value, name, "with", field)
+            overrides[name] = value
+
+        result = dict(base)
+        result.update(overrides)
+        base_type = self._called_of.get(id(base))
+        if base_type:
+            self._called_of[id(result)] = base_type
+        return result
+
+    # ── struct extension (§3.2.2) ────────────────────────────────────
+
+    def _eval_struct_extension(
+        self, node: StructExtension, scope: Scope, exclude: str | None
+    ) -> dict[str, Any]:
+        """§3.2.2: Evaluate `base extends { fields }` — copy, override, and add."""
+        base = self._eval_node(node.base, scope, exclude)
+        if base is UzonUndefined:
+            raise UzonRuntimeError(
+                "'extends' requires a concrete struct, got undefined",
+                node.line, node.col, file=self._filename,
+            )
+        if isinstance(base, UzonTaggedUnion):
+            raise UzonTypeError(
+                "'extends' requires a struct, not a tagged union",
+                node.line, node.col, file=self._filename,
+            )
+        if not isinstance(base, dict):
+            raise UzonTypeError(
+                f"'extends' requires a struct, got {self._type_name(base)}",
+                node.line, node.col, file=self._filename,
+            )
+
+        ext_scope = self._augment_scope_with_types(scope, base)
+        overrides: dict[str, Any] = {}
+        additions: dict[str, Any] = {}
+
+        for field in node.extensions.fields:
+            name = field.name
+            is_existing = name in base
+            value = self._eval_field_value(field, ext_scope, exclude)
+            if value is UzonUndefined:
+                raise UzonTypeError(
+                    f"'extends' field: '{name}' cannot be undefined",
+                    field.line, field.col, file=self._filename,
+                )
+            if is_existing:
+                value = self._check_override_compat(base[name], value, name, "extends", field)
+                overrides[name] = value
+            else:
+                additions[name] = value
+
+        if not additions:
+            raise UzonTypeError(
+                "'extends' must add at least one new field — use 'with' for override-only",
+                node.line, node.col, file=self._filename,
+            )
+
+        result = dict(base)
+        result.update(overrides)
+        result.update(additions)
+        return result
+
+    # ── shared struct helpers ────────────────────────────────────────
+
+    def _augment_scope_with_types(self, scope: Scope, base: dict) -> Scope:
+        """Create a scope augmented with the base struct's type definitions."""
+        base_scope = self._scope_of.get(id(base))
+        if base_scope and base_scope._types:
+            augmented = Scope(parent=scope)
+            for tname, tinfo in base_scope._types.items():
+                augmented.define_type(tname, tinfo)
+            return augmented
+        return scope
+
+    def _eval_field_value(
+        self, field: Binding | AreBinding, scope: Scope, exclude: str | None
+    ) -> Any:
+        """Evaluate a struct field (binding or are-binding)."""
+        if isinstance(field, AreBinding):
+            elements = []
+            for elem in field.elements:
+                v = self._eval_node(elem, scope, exclude)
+                if v is UzonUndefined:
+                    raise UzonRuntimeError(
+                        "List element is undefined",
+                        elem.line, elem.col, file=self._filename,
+                    )
+                elements.append(v)
+            self._check_list_homogeneity(elements, field)
+            return elements
+        return self._eval_node(field.value, scope, exclude)
+
+    def _check_override_compat(
+        self, original: Any, value: Any, field_name: str, context: str, field: Node
+    ) -> Any:
+        """Check type compatibility for struct field override, with adoptable coercion."""
+        if original is not None and value is not None:
+            if not self._same_uzon_type(original, value):
+                raise UzonTypeError(
+                    f"'{context}' override: field '{field_name}' type mismatch — "
+                    f"original is {self._type_name(original)}, override is {self._type_name(value)}",
+                    field.line, field.col, file=self._filename,
+                )
+            if (isinstance(original, UzonInt) and isinstance(value, UzonInt)
+                    and value.adoptable and original.type_name != value.type_name):
+                m = INT_TYPE_RE.match(original.type_name)
+                if m:
+                    self._check_int_range(int(value), m.group(1), int(m.group(2)), original.type_name, field)
+                value = UzonInt(int(value), original.type_name)
+            elif (isinstance(original, UzonFloat) and isinstance(value, UzonFloat)
+                    and value.adoptable and original.type_name != value.type_name):
+                value = UzonFloat(float(value), original.type_name)
+        return value
+
+    # ── file import (§7) ─────────────────────────────────────────────
+
+    def _eval_struct_import(self, node: StructImport) -> dict[str, Any]:
+        """§7.1: Evaluate `struct "path"` — import a .uzon file as a struct."""
+        from ..lexer import Lexer
+        from ..parser import Parser
+
+        raw_path = node.path
+        if self._filename == "<string>":
+            raise UzonRuntimeError(
+                "Cannot use struct import when evaluating from a string",
+                node.line, node.col, file=self._filename,
+            )
+        base_dir = os.path.dirname(os.path.abspath(self._filename))
+        if "." not in os.path.basename(raw_path):
+            raw_path = raw_path + ".uzon"
+        resolved = os.path.normpath(os.path.join(base_dir, raw_path))
+
+        if resolved in self._import_stack:
+            raise UzonCircularError(
+                f"Circular import: {resolved}", node.line, node.col,
+                file=self._filename,
+            )
+        if resolved in self._import_cache:
+            return self._import_cache[resolved]
+
+        if not os.path.isfile(resolved):
+            raise UzonRuntimeError(
+                f"Import file not found: {resolved}", node.line, node.col,
+                file=self._filename,
+            )
+        source = open(resolved, encoding="utf-8").read()
+        tokens = Lexer(source).tokenize()
+        doc = Parser(tokens).parse()
+
+        self._import_stack.append(resolved)
+        old_filename = self._filename
+        self._filename = resolved
+        try:
+            scope = Scope()
+            scope.define("std", self._build_std())
+            self._evaluate_bindings(doc.bindings, scope)
+            result = scope.to_dict()
+            result.pop("std", None)
+            self._scope_of[id(result)] = scope
+        finally:
+            self._filename = old_filename
+            self._import_stack.pop()
+
+        self._import_cache[resolved] = result
+        return result
