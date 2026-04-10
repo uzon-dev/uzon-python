@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: © 2026 Suho Kang
+# SPDX-License-Identifier: MIT
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "uzon"
+version = "0.1.0"
+description = "Parse and generate UZON data format"
+readme = "README.md"
+license = "MIT"
+requires-python = ">= 3.10"
+authors = [{ name = "Suho Kang" }]
+keywords = ["uzon", "parser", "configuration", "data-format"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.optional-dependencies]
+dev = ["pytest >= 8.0"]
+
+[project.urls]
+Homepage = "https://uzon.dev"
+Repository = "https://github.com/uzon-dev/uzon-python"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/uzon"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
