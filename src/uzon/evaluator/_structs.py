@@ -276,12 +276,11 @@ class StructMixin:
         from ..parser import Parser
 
         raw_path = node.path
+        # §7: Use CWD as base directory when evaluating from a string
         if self._filename == "<string>":
-            raise UzonRuntimeError(
-                "Cannot use struct import when evaluating from a string",
-                node.line, node.col, file=self._filename,
-            )
-        base_dir = os.path.dirname(os.path.abspath(self._filename))
+            base_dir = os.getcwd()
+        else:
+            base_dir = os.path.dirname(os.path.abspath(self._filename))
         if "." not in os.path.basename(raw_path):
             raw_path = raw_path + ".uzon"
         resolved = os.path.normpath(os.path.join(base_dir, raw_path))
