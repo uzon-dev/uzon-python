@@ -16,6 +16,11 @@ print(data["server"]["host"])   # "localhost"
 print(data["server"]["port"])   # UzonInt(8080, 'u16')
 ```
 
+```python
+>>> uzon.__version__
+'0.5.0'
+```
+
 ## Installation
 
 ```
@@ -590,7 +595,8 @@ All type wrappers are importable from `uzon`:
 ```python
 from uzon import (
     UzonInt, UzonFloat, UzonEnum, UzonUnion,
-    UzonTaggedUnion, UzonStruct, UzonUndefined,
+    UzonTaggedUnion, UzonStruct, UzonTypedList,
+    UzonFunction, UzonUndefined,
 )
 ```
 
@@ -602,6 +608,12 @@ class UzonInt(int)
 
 Typed UZON integer preserving width annotation. Subclasses `int` — usable anywhere a plain `int` is expected.
 
+**Constructor:**
+
+```python
+UzonInt(value: int, type_name: str, *, adoptable: bool = False)
+```
+
 **Attributes:**
 
 | Name | Type | Description |
@@ -612,6 +624,10 @@ Typed UZON integer preserving width annotation. Subclasses `int` — usable anyw
 **Methods:**
 - `to_plain() -> int` — Return the underlying plain `int`.
 
+**String representations:**
+- `repr(x)` → `UzonInt(10, 'i32')`
+- `str(x)` → `10` (plain integer string)
+
 **Arithmetic:** All arithmetic operators (`+`, `-`, `*`, `//`, `%`, `**`, `&`, `|`, `^`, `<<`, `>>`, unary `-`/`+`/`abs`/`~`, `round`) return `UzonInt` with the same `type_name`. If the result overflows the type's range, `OverflowError` is raised.
 
 ```python
@@ -620,6 +636,9 @@ y = x + 20                  # UzonInt(120, 'i8')
 z = x + 30                  # OverflowError: Result 130 overflows i8 range [-128, 127]
 assert isinstance(x + 1, uzon.UzonInt)
 assert (x + 1).type_name == "i8"
+
+# Direct construction (prefer val factory)
+n = UzonInt(42, "i32")
 ```
 
 ---
@@ -632,6 +651,12 @@ class UzonFloat(float)
 
 Typed UZON float preserving width annotation. Subclasses `float`.
 
+**Constructor:**
+
+```python
+UzonFloat(value: float, type_name: str, *, adoptable: bool = False)
+```
+
 **Attributes:**
 
 | Name | Type | Description |
@@ -642,11 +667,16 @@ Typed UZON float preserving width annotation. Subclasses `float`.
 **Methods:**
 - `to_plain() -> float` — Return the underlying plain `float`.
 
-**Arithmetic:** All arithmetic operators return `UzonFloat` with the same `type_name`.
+**String representations:**
+- `repr(x)` → `UzonFloat(1.5, 'f32')`
+- `str(x)` → `1.5` (plain float string)
+
+**Arithmetic:** Operators `+`, `-`, `*`, `/`, `//`, `%`, `**`, unary `-`/`+`/`abs`, `round` return `UzonFloat` with the same `type_name`. Bitwise operators (`&`, `|`, `^`, `<<`, `>>`, `~`) are not supported on floats.
 
 ```python
 x = uzon.val.f32(1.5)
 y = x * 2.0                 # UzonFloat(3.0, 'f32')
+z = x / 3.0                 # UzonFloat(0.5, 'f32')
 assert isinstance(y, uzon.UzonFloat)
 ```
 
@@ -660,6 +690,12 @@ class UzonEnum
 
 Enum value — one variant from a defined set.
 
+**Constructor:**
+
+```python
+UzonEnum(value: str, variants: list[str], type_name: str | None = None)
+```
+
 **Attributes:**
 
 | Name | Type | Description |
@@ -671,7 +707,13 @@ Enum value — one variant from a defined set.
 **Methods:**
 - `to_plain() -> str` — Return the variant name as a plain string.
 
-**Equality:** Compares equal to other `UzonEnum` with the same `value` and `type_name`, or to a plain `str` matching `value`.
+**String representations:**
+- `repr(x)` → `UzonEnum('Red', type=Color)`
+- `str(x)` → `Red` (variant name)
+
+**Equality:** Compares equal to other `UzonEnum` with the same `value` and `type_name`, or to a plain `str` matching `value`. Hashable.
+
+**Pattern matching (Python 3.10+):** `__match_args__ = ("value",)`
 
 ```python
 data = uzon.loads('color is Red | Green | Blue')
@@ -679,6 +721,11 @@ color = data["color"]
 assert color == "Red"        # compare with str
 assert color.value == "Red"
 assert color.variants == ["Red", "Green", "Blue"]
+print(f"Color: {color}")     # "Color: Red"
+
+match color:
+    case UzonEnum("Red"):
+        print("got red")
 ```
 
 ---
@@ -690,6 +737,12 @@ class UzonUnion
 ```
 
 Untagged union — a value with one of several possible types.
+
+**Constructor:**
+
+```python
+UzonUnion(value: Any, types: list[str], type_name: str | None = None)
+```
 
 **Attributes:**
 
@@ -704,13 +757,19 @@ Untagged union — a value with one of several possible types.
 
 **Transparent access:** `[]`, `len()`, `iter()`, `in`, and `bool()` delegate to the inner value.
 
-**Equality:** Compares inner values — `UzonUnion(42) == 42` is `True`.
+**Equality:** Compares inner values — `UzonUnion(42) == 42` is `True`. Hashable (delegates to inner value).
+
+**Pattern matching (Python 3.10+):** `__match_args__ = ("value",)`
 
 ```python
 data = uzon.loads('value is 42 as i32 | string')
 v = data["value"]
 assert v == 42
 assert v.types == ["i32", "string"]
+
+match v:
+    case UzonUnion(int(n)):
+        print(f"integer: {n}")
 ```
 
 ---
@@ -722,6 +781,12 @@ class UzonTaggedUnion
 ```
 
 Tagged union — a value paired with an explicit variant tag.
+
+**Constructor:**
+
+```python
+UzonTaggedUnion(value: Any, tag: str, variants: dict[str, str | None], type_name: str | None = None)
+```
 
 **Attributes:**
 
@@ -735,11 +800,15 @@ Tagged union — a value paired with an explicit variant tag.
 **Methods:**
 - `to_plain() -> Any` — Return the inner value.
 
+**String representations:**
+- `repr(x)` → `UzonTaggedUnion(42, tag='Ok', type=Result)`
+- `str(x)` → `42` (inner value's string)
+
 **Transparent access:** `[]`, `len()`, `iter()`, `in` delegate to the inner value.
 
-**Equality:** Compares both `tag` AND inner `value`.
+**Equality:** Compares both `tag` AND inner `value`. Hashable.
 
-**Pattern matching (Python 3.10+):**
+**Pattern matching (Python 3.10+):** `__match_args__ = ("tag", "value")`
 
 ```python
 data = uzon.loads('result is Ok(42) | Err("fail")')
@@ -759,6 +828,12 @@ class UzonStruct(dict)
 ```
 
 Dict subclass that preserves a named type annotation for round-trip fidelity. Used when a struct has an explicit `called TypeName` annotation.
+
+**Constructor:**
+
+```python
+UzonStruct(mapping: dict | None = None, type_name: str | None = None)
+```
 
 **Attributes:**
 
@@ -780,6 +855,69 @@ assert isinstance(server, uzon.UzonStruct)
 assert server.type_name == "Server"
 assert server["host"] == "localhost"
 ```
+
+---
+
+#### `UzonTypedList`
+
+```python
+class UzonTypedList(list)
+```
+
+List subclass that preserves element type annotation for round-trip fidelity. Produced when a list has an explicit `as [Type]` annotation.
+
+**Constructor:**
+
+```python
+UzonTypedList(elements: list, element_type: str | None = None)
+```
+
+**Attributes:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `element_type` | `str \| None` | Element type annotation (e.g. `"i32"`, `"Server"`). |
+
+All standard `list` operations work. Subclass of `list`.
+
+```python
+data = uzon.loads('scores is [95, 87, 72] as [i32]')
+scores = data["scores"]
+assert isinstance(scores, uzon.UzonTypedList)
+assert scores.element_type == "i32"
+assert scores[0] == 95
+```
+
+---
+
+#### `UzonFunction`
+
+```python
+class UzonFunction
+```
+
+Function value — a closure capturing its definition scope. Produced when parsing `fn(params) -> ReturnType { body }` expressions.
+
+**Attributes:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `params` | `list[tuple[str, str, Any]]` | Parameter list: `[(name, type_name, default_or_None), ...]`. |
+| `return_type` | `str` | Return type name. |
+| `type_name` | `str \| None` | Named type, if declared with `called`. |
+
+**Methods:**
+- `signature() -> tuple[tuple[str, ...], str]` — Return `(param_types, return_type)` for structural comparison.
+
+Functions are not directly callable from Python — they are evaluated within UZON expressions.
+
+```python
+data = uzon.loads('double is fn(x: i32) -> i32 { x * 2 }, result is double(21)')
+assert isinstance(data["double"], uzon.UzonFunction)
+assert data["result"] == 42
+```
+
+> **Note:** `UzonFunction` and `UzonBuiltinFunction` are not JSON-serializable — `json_default()` raises `TypeError` for them.
 
 ---
 
