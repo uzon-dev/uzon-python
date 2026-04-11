@@ -149,11 +149,11 @@ class TestErrors:
 
     def test_circular_error(self):
         with pytest.raises(uzon.UzonCircularError):
-            uzon.loads("a is self.b\nb is self.a")
+            uzon.loads("a is b\nb is a")
 
     def test_runtime_error(self):
         with pytest.raises(uzon.UzonRuntimeError):
-            uzon.loads("x is undefined")
+            uzon.loads("x is 1 / 0")
 
 
 class TestMerge:

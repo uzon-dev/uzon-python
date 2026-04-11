@@ -9,7 +9,7 @@ from uzon.ast_nodes import (
     Document, EnvRef, FieldExtraction, FloatLiteral, FromEnum, FromUnion,
     FunctionCall, FunctionExpr, Grouping, Identifier, IfExpr,
     InfLiteral, IntegerLiteral, ListLiteral, MemberAccess,
-    NamedVariant, NanLiteral, NullLiteral, OrElse, SelfRef,
+    NamedVariant, NanLiteral, NullLiteral, OrElse,
     StringLiteral, StructExtension, StructImport, StructLiteral,
     StructOverride, TupleLiteral, TypeAnnotation, TypeExpr,
     UnaryOp, UndefinedLiteral, WhenClause,
@@ -206,13 +206,13 @@ class TestEquality:
         assert b.value.op == "is not"
 
     def test_is_named(self):
-        doc = parse("x is self.y is named ok")
+        doc = parse("x is y is named ok")
         b = doc.bindings[0]
         assert isinstance(b.value, BinaryOp)
         assert b.value.op == "is named"
 
     def test_is_not_named(self):
-        doc = parse("x is self.y is not named err")
+        doc = parse("x is y is not named err")
         b = doc.bindings[0]
         assert isinstance(b.value, BinaryOp)
         assert b.value.op == "is not named"
@@ -269,7 +269,7 @@ class TestMembership:
 
 class TestOrElse:
     def test_or_else(self):
-        doc = parse("x is self.y or else 5")
+        doc = parse("x is y or else 5")
         b = doc.bindings[0]
         assert isinstance(b.value, OrElse)
 
@@ -300,19 +300,18 @@ class TestCollectionOps:
 # ── Member access (§5.5) ──────────────────────────────────────────
 
 class TestMemberAccess:
-    def test_self_member(self):
-        doc = parse("x is self.y")
-        b = doc.bindings[0]
-        assert isinstance(b.value, MemberAccess)
-        assert isinstance(b.value.object, SelfRef)
-        assert b.value.member == "y"
+    def test_identifier_member(self):
+        doc = parse("a is 1\nx is a")
+        b = doc.bindings[1]
+        assert isinstance(b.value, Identifier)
+        assert b.value.name == "a"
 
     def test_chained_member(self):
-        doc = parse("x is self.config.port")
-        b = doc.bindings[0]
+        doc = parse("config is { port is 8080 }\nx is config.port")
+        b = doc.bindings[1]
         assert isinstance(b.value, MemberAccess)
         assert b.value.member == "port"
-        assert isinstance(b.value.object, MemberAccess)
+        assert isinstance(b.value.object, Identifier)
 
     def test_env_member(self):
         doc = parse("x is env.HOME")
@@ -323,8 +322,8 @@ class TestMemberAccess:
 
     def test_numeric_member(self):
         """§5.5: Numeric indexing via dot."""
-        doc = parse("x is self.list.0")
-        b = doc.bindings[0]
+        doc = parse("list is [1, 2]\nx is list.0")
+        b = doc.bindings[1]
         assert isinstance(b.value, MemberAccess)
         assert b.value.member == "0"
 
@@ -333,8 +332,8 @@ class TestMemberAccess:
 
 class TestUnary:
     def test_unary_minus(self):
-        doc = parse("x is -self.y")
-        b = doc.bindings[0]
+        doc = parse("y is 5\nx is -y")
+        b = doc.bindings[1]
         assert isinstance(b.value, UnaryOp)
         assert b.value.op == "-"
 
@@ -381,8 +380,8 @@ class TestTypeSystem:
         assert b.value.type.name == "null"
 
     def test_dotted_type(self):
-        doc = parse("x is self.inner.color as inner.RGB")
-        b = doc.bindings[0]
+        doc = parse("inner is { color is red from red, green, blue called RGB }\nx is inner.color as inner.RGB")
+        b = doc.bindings[1]
         assert isinstance(b.value, TypeAnnotation)
         assert b.value.type.path == ["inner", "RGB"]
 
@@ -523,7 +522,7 @@ class TestControlFlow:
         assert len(b.value.when_clauses) == 1
 
     def test_case_multiple_when(self):
-        doc = parse('x is case self.n when 1 then "a" when 2 then "b" else "c"')
+        doc = parse('x is case n when 1 then "a" when 2 then "b" else "c"')
         b = doc.bindings[0]
         assert isinstance(b.value, CaseExpr)
         assert len(b.value.when_clauses) == 2
@@ -537,24 +536,24 @@ class TestControlFlow:
 
 class TestWithExtends:
     def test_with(self):
-        doc = parse("x is self.base with { a is 1 }")
+        doc = parse("x is base with { a is 1 }")
         b = doc.bindings[0]
         assert isinstance(b.value, StructOverride)
         assert isinstance(b.value.overrides, StructLiteral)
 
     def test_extends(self):
-        doc = parse("x is self.base extends { b is 2 }")
+        doc = parse("x is base extends { b is 2 }")
         b = doc.bindings[0]
         assert isinstance(b.value, StructExtension)
         assert isinstance(b.value.extensions, StructLiteral)
 
     def test_chained_with_error(self):
         with pytest.raises(UzonSyntaxError, match="Cannot chain"):
-            parse("x is self.base with { a is 1 } with { b is 2 }")
+            parse("x is base with { a is 1 } with { b is 2 }")
 
     def test_chained_extends_error(self):
         with pytest.raises(UzonSyntaxError, match="Cannot chain"):
-            parse("x is self.base extends { a is 1 } extends { b is 2 }")
+            parse("x is base extends { a is 1 } extends { b is 2 }")
 
 
 # ── Functions (§3.8) ──────────────────────────────────────────────
@@ -598,13 +597,13 @@ class TestFunctions:
             parse("f is function a as Integer default 0, b as Integer returns Integer { b }")
 
     def test_function_call(self):
-        doc = parse("x is self.f(1, 2)")
+        doc = parse("x is f(1, 2)")
         b = doc.bindings[0]
         assert isinstance(b.value, FunctionCall)
         assert len(b.value.args) == 2
 
     def test_function_call_no_args(self):
-        doc = parse("x is self.f()")
+        doc = parse("x is f()")
         b = doc.bindings[0]
         assert isinstance(b.value, FunctionCall)
         assert len(b.value.args) == 0
@@ -641,13 +640,13 @@ class TestAreBinding:
 
 class TestFieldExtraction:
     def test_is_of(self):
-        doc = parse("port is of self.config")
+        doc = parse("port is of config")
         b = doc.bindings[0]
         assert isinstance(b.value, FieldExtraction)
-        assert isinstance(b.value.source, MemberAccess)
+        assert isinstance(b.value.source, Identifier)
 
     def test_is_of_chained(self):
-        doc = parse("x is of self.a.b")
+        doc = parse("x is of a.b")
         b = doc.bindings[0]
         assert isinstance(b.value, FieldExtraction)
 
@@ -691,16 +690,16 @@ class TestBindingDecomposition:
 
 class TestStringInterpolation:
     def test_interpolation_parts(self):
-        doc = parse('x is "hello {self.name}"')
-        b = doc.bindings[0]
+        doc = parse('name is "world"\nx is "hello {name}"')
+        b = doc.bindings[1]
         assert isinstance(b.value, StringLiteral)
         assert len(b.value.parts) == 2
         assert b.value.parts[0] == "hello "
-        assert isinstance(b.value.parts[1], MemberAccess)
+        assert isinstance(b.value.parts[1], Identifier)
 
     def test_multiple_interpolations(self):
-        doc = parse('x is "{self.a} and {self.b}"')
-        b = doc.bindings[0]
+        doc = parse('a is 1\nb is 2\nx is "{a} and {b}"')
+        b = doc.bindings[2]
         assert isinstance(b.value, StringLiteral)
         assert len(b.value.parts) >= 3
 
@@ -745,9 +744,15 @@ class TestNewlineSep:
 # ── References (§5.12, §5.13) ────────────────────────────────────
 
 class TestReferences:
-    def test_self(self):
-        doc = parse("x is self")
-        assert isinstance(doc.bindings[0].value, SelfRef)
+    def test_self_reserved(self):
+        """§5.12: self is a reserved keyword."""
+        with pytest.raises(UzonSyntaxError, match="reserved"):
+            parse("x is self")
+
+    def test_self_member_reserved(self):
+        """§5.12: self.name is not allowed."""
+        with pytest.raises(UzonSyntaxError, match="reserved"):
+            parse("x is self.y")
 
     def test_env(self):
         doc = parse("x is env.HOME")
@@ -755,11 +760,10 @@ class TestReferences:
         assert isinstance(b.value, MemberAccess)
         assert isinstance(b.value.object, EnvRef)
 
-    def test_self_member(self):
-        doc = parse("x is self.y")
-        b = doc.bindings[0]
-        assert isinstance(b.value, MemberAccess)
-        assert isinstance(b.value.object, SelfRef)
+    def test_bare_identifier(self):
+        doc = parse("a is 1\nx is a")
+        b = doc.bindings[1]
+        assert isinstance(b.value, Identifier)
 
 
 # ── Error cases ──────────────────────────────────────────────────

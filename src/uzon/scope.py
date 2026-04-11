@@ -3,11 +3,11 @@
 """UZON scope — lexical scoping with self-exclusion per §5.12.
 
 The scope chain implements:
-- Lexical parent chain: self.name walks current → parent → ... → file scope.
+- Lexical parent chain: bare identifiers walk current → parent → ... → file scope.
 - Self-exclusion rule (§5.12): when evaluating a binding, the binding's
   own name is excluded from the current scope lookup.
 - Type namespace (§6.2): separate from binding namespace.
-- File boundary isolation (§7.3): self does not cross file boundaries.
+- File boundary isolation (§7.3): scope does not cross file boundaries.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ class Scope:
 
     @property
     def self_scope(self) -> Scope:
-        """The scope that `self.name` resolves against.
+        """The scope for closure resolution.
 
         For function body scopes (§3.8), this is the closure scope (skipping params).
         For normal scopes, this is the scope itself.

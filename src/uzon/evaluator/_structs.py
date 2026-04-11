@@ -13,7 +13,7 @@ import os
 from typing import Any
 
 from ..ast_nodes import (
-    AreBinding, Binding, MemberAccess, Node, SelfRef, EnvRef,
+    AreBinding, Binding, MemberAccess, Node, EnvRef,
     StructImport, StructLiteral, StructExtension, StructOverride,
 )
 from ..errors import UzonCircularError, UzonError, UzonRuntimeError, UzonTypeError
@@ -39,9 +39,6 @@ class StructMixin:
     def _eval_member_access(
         self, node: MemberAccess, scope: Scope, exclude: str | None
     ) -> Any:
-        if isinstance(node.object, SelfRef):
-            self_scope = scope.self_scope
-            return self_scope.get(node.member, exclude=exclude)
         if isinstance(node.object, EnvRef):
             return os.environ.get(node.member, UzonUndefined)
 

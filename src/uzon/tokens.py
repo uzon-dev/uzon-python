@@ -61,7 +61,7 @@ class TokenType(Enum):
     WHEN = auto()       # §5.10: case clause
 
     # ── Keywords — references (§2.5) ──────────────────────────────
-    SELF = auto()       # §5.12: lexical scope reference
+    SELF = auto()       # §5.12: reserved keyword
     ENV = auto()        # §5.13: environment variable access
 
     # ── Keywords — import (§2.5) ──────────────────────────────────

@@ -213,13 +213,13 @@ class TestMinus:
 
 class TestStringInterpolation:
     def test_basic(self):
-        types = [t for t, _ in lex('"hello {self.x}"')]
+        types = [t for t, _ in lex('"hello {name}"')]
         assert TokenType.INTERP_START in types
         assert TokenType.INTERP_END in types
 
     def test_struct_in_interpolation(self):
         """§4.4.1: Nested braces inside interpolation."""
-        types = [t for t, _ in lex('"value: {self.x}"')]
+        types = [t for t, _ in lex('"value: {x}"')]
         assert TokenType.INTERP_START in types
 
     def test_escaped_brace(self):
