@@ -81,14 +81,17 @@ def _collect_parse_valid():
     _dir = CONFORMANCE_DIR / "parse" / "valid"
     if not _dir.is_dir():
         return []
-    return sorted(f.stem for f in _dir.iterdir() if f.suffix == ".uzon")
+    return sorted(
+        str(f.relative_to(_dir).with_suffix("")).replace(os.sep, "/")
+        for f in _dir.rglob("*.uzon")
+    )
 
 
 @pytest.mark.parametrize("name", _collect_parse_valid())
 def test_parse_valid(name: str):
     _skip_if_missing()
     src_file = CONFORMANCE_DIR / "parse" / "valid" / f"{name}.uzon"
-    uzon.load(src_file)  # should not raise
+    uzon.load(src_file)
 
 
 # ── parse/invalid tests ──────────────────────────────────────────
@@ -98,7 +101,10 @@ def _collect_parse_invalid():
     _dir = CONFORMANCE_DIR / "parse" / "invalid"
     if not _dir.is_dir():
         return []
-    return sorted(f.stem for f in _dir.iterdir() if f.suffix == ".uzon")
+    return sorted(
+        str(f.relative_to(_dir).with_suffix("")).replace(os.sep, "/")
+        for f in _dir.rglob("*.uzon")
+    )
 
 
 @pytest.mark.parametrize("name", _collect_parse_invalid())
