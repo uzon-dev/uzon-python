@@ -900,7 +900,7 @@ UzonTypedList(elements: list, element_type: str | None = None)
 All standard `list` operations work. Subclass of `list`.
 
 ```python
-data = uzon.loads('scores is [95, 87, 72] as [i32]')
+data = uzon.loads('scores is [ 95, 87, 72 ] as [i32]')
 scores = data["scores"]
 assert isinstance(scores, uzon.UzonTypedList)
 assert scores.element_type == "i32"
