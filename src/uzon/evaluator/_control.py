@@ -339,6 +339,11 @@ class ControlMixin:
 
     def _eval_is_named(self, op: str, left: Any, node: BinaryOp) -> bool:
         """§3.7.2: Evaluate `value is named tag` / `value is not named tag`."""
+        if left is UzonUndefined:
+            raise UzonRuntimeError(
+                "'is named' requires a tagged union, got undefined",
+                node.line, node.col, file=self._filename,
+            )
         if not isinstance(left, UzonTaggedUnion):
             raise UzonTypeError(
                 f"'is named' requires a tagged union, got {self._type_name(left)}",
