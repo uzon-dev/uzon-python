@@ -14,6 +14,8 @@ UzonBuiltinFunction — §5.16: std library built-in function.
 
 from __future__ import annotations
 
+import copy as _copy
+
 
 class _UzonUndefinedType:
     """§3.1: Singleton sentinel for UZON undefined state."""
@@ -30,6 +32,12 @@ class _UzonUndefinedType:
 
     def __bool__(self) -> bool:
         return False
+
+    def __copy__(self) -> _UzonUndefinedType:
+        return self
+
+    def __deepcopy__(self, memo: dict) -> _UzonUndefinedType:
+        return self
 
 
 UzonUndefined = _UzonUndefinedType()
@@ -57,6 +65,12 @@ class UzonInt(int):
     def __str__(self) -> str:
         return int.__repr__(self)
 
+    def __copy__(self) -> UzonInt:
+        return self  # immutable
+
+    def __deepcopy__(self, memo: dict) -> UzonInt:
+        return self  # immutable
+
     def to_plain(self) -> int:
         return int(self)
 
@@ -83,6 +97,12 @@ class UzonFloat(float):
     def __str__(self) -> str:
         return float.__repr__(self)
 
+    def __copy__(self) -> UzonFloat:
+        return self  # immutable
+
+    def __deepcopy__(self, memo: dict) -> UzonFloat:
+        return self  # immutable
+
     def to_plain(self) -> float:
         return float(self)
 
@@ -102,6 +122,12 @@ class UzonTypedList(list):
 
     def __repr__(self) -> str:
         return f"UzonTypedList({list.__repr__(self)}, element_type={self.element_type!r})"
+
+    def __copy__(self) -> UzonTypedList:
+        return UzonTypedList(list(self), self.element_type)
+
+    def __deepcopy__(self, memo: dict) -> UzonTypedList:
+        return UzonTypedList([_copy.deepcopy(e, memo) for e in self], self.element_type)
 
 
 class UzonEnum:
@@ -130,6 +156,12 @@ class UzonEnum:
 
     def __str__(self) -> str:
         return self.value
+
+    def __copy__(self) -> UzonEnum:
+        return UzonEnum(self.value, self.variants, self.type_name)
+
+    def __deepcopy__(self, memo: dict) -> UzonEnum:
+        return UzonEnum(self.value, list(self.variants), self.type_name)
 
     def to_plain(self) -> str:
         return self.value
@@ -162,6 +194,19 @@ class UzonUnion:
 
     def __str__(self) -> str:
         return str(self.value)
+
+    def __bool__(self) -> bool:
+        return bool(self.value)
+
+    def __copy__(self) -> UzonUnion:
+        return UzonUnion(self.value, self.types, self.type_name)
+
+    def __deepcopy__(self, memo: dict) -> UzonUnion:
+        return UzonUnion(
+            _copy.deepcopy(self.value, memo),
+            list(self.types),
+            self.type_name,
+        )
 
     def to_plain(self) -> object:
         return self.value
@@ -201,6 +246,17 @@ class UzonTaggedUnion:
 
     def __str__(self) -> str:
         return str(self.value)
+
+    def __copy__(self) -> UzonTaggedUnion:
+        return UzonTaggedUnion(self.value, self.tag, self.variants, self.type_name)
+
+    def __deepcopy__(self, memo: dict) -> UzonTaggedUnion:
+        return UzonTaggedUnion(
+            _copy.deepcopy(self.value, memo),
+            self.tag,
+            _copy.deepcopy(self.variants, memo),
+            self.type_name,
+        )
 
     def to_plain(self) -> object:
         return self.value
