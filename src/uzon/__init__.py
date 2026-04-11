@@ -185,8 +185,11 @@ def merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
         merged = uzon.merge(base, override)
         # → {"host": "localhost", "port": 9090, "debug": True}
     """
-    result = _merge_dicts(base, override)
-    return result
+    if not isinstance(base, dict):
+        raise TypeError(f"merge() base must be a dict, got {type(base).__name__}")
+    if not isinstance(override, dict):
+        raise TypeError(f"merge() override must be a dict, got {type(override).__name__}")
+    return _merge_dicts(base, override)
 
 
 def _merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
