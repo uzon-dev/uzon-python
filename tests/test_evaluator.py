@@ -201,22 +201,22 @@ class TestLogic:
         assert r["x"] is True
 
 
-# ── Self-reference and dependencies ───────────────────────────────
+# ── Bare identifier reference and dependencies ──────────────────
 
 class TestSelfReference:
     def test_forward_ref(self):
         """Dependency graph resolves forward references."""
-        r = evaluate("a is self.b + 1\nb is 10")
+        r = evaluate("a is b + 1\nb is 10")
         assert r["a"] == 11
 
     def test_self_exclusion(self):
-        """§5.12: self.x inside x's binding skips to parent scope."""
-        r = evaluate("x is { a is 10, b is self.a * 2 }")
+        """§5.12: bare identifier inside its own binding skips to parent scope."""
+        r = evaluate("x is { a is 10, b is a * 2 }")
         assert r["x"]["b"] == 20
 
     def test_circular_error(self):
         with pytest.raises(UzonCircularError):
-            evaluate("a is self.b\nb is self.a")
+            evaluate("a is b\nb is a")
 
     def test_duplicate_binding_error(self):
         with pytest.raises(UzonSyntaxError, match="Duplicate binding"):
@@ -227,11 +227,11 @@ class TestSelfReference:
 
 class TestOrElse:
     def test_defined_value(self):
-        r = evaluate("x is 42\ny is self.x or else 0")
+        r = evaluate("x is 42\ny is x or else 0")
         assert r["y"] == 42
 
     def test_undefined_fallback(self):
-        r = evaluate("y is self.missing or else 99")
+        r = evaluate("y is missing or else 99")
         assert r["y"] == 99
 
 
@@ -248,15 +248,15 @@ class TestStruct:
         assert r["x"]["inner"]["v"] == 99
 
     def test_struct_self_ref(self):
-        r = evaluate("x is { a is 10, b is self.a + 5 }")
+        r = evaluate("x is { a is 10, b is a + 5 }")
         assert r["x"]["b"] == 15
 
     def test_struct_member_access(self):
-        r = evaluate("s is { x is 1, y is 2 }\nv is self.s.x")
+        r = evaluate("s is { x is 1, y is 2 }\nv is s.x")
         assert r["v"] == 1
 
     def test_nested_member_access(self):
-        r = evaluate("s is { inner is { val is 99 } }\nv is self.s.inner.val")
+        r = evaluate("s is { inner is { val is 99 } }\nv is s.inner.val")
         assert r["v"] == 99
 
 
@@ -264,25 +264,25 @@ class TestStruct:
 
 class TestWithExtends:
     def test_with_override(self):
-        r = evaluate("base is { x is 1, y is 2 }\nresult is self.base with { x is 10 }")
+        r = evaluate("base is { x is 1, y is 2 }\nresult is base with { x is 10 }")
         assert r["result"]["x"] == 10
         assert r["result"]["y"] == 2
 
     def test_with_nonexistent_field_error(self):
         with pytest.raises(UzonRuntimeError, match="does not exist"):
-            evaluate("base is { x is 1 }\nresult is self.base with { z is 5 }")
+            evaluate("base is { x is 1 }\nresult is base with { z is 5 }")
 
     def test_extends_add_field(self):
-        r = evaluate("base is { x is 1 }\nresult is self.base extends { y is 2 }")
+        r = evaluate("base is { x is 1 }\nresult is base extends { y is 2 }")
         assert r["result"]["x"] == 1
         assert r["result"]["y"] == 2
 
     def test_extends_no_new_field_error(self):
         with pytest.raises(UzonTypeError, match="must add at least one"):
-            evaluate("base is { x is 1 }\nresult is self.base extends { x is 2 }")
+            evaluate("base is { x is 1 }\nresult is base extends { x is 2 }")
 
     def test_extends_override_and_add(self):
-        r = evaluate("base is { x is 1 }\nresult is self.base extends { x is 10, y is 2 }")
+        r = evaluate("base is { x is 1 }\nresult is base extends { x is 10, y is 2 }")
         assert r["result"]["x"] == 10
         assert r["result"]["y"] == 2
 
@@ -304,7 +304,7 @@ class TestList:
 
     def test_list_indexing(self):
         """List elements accessible by ordinal names."""
-        r = evaluate("x is [10, 20, 30] as [i64]\ny is self.x.first")
+        r = evaluate("x is [10, 20, 30] as [i64]\ny is x.first")
         assert r["y"] == 10
 
 
@@ -320,7 +320,7 @@ class TestTuple:
         assert r["x"] == ()
 
     def test_tuple_ordinal_access(self):
-        r = evaluate("x is (10, 20, 30)\ny is self.x.second")
+        r = evaluate("x is (10, 20, 30)\ny is x.second")
         assert r["y"] == 20
 
 
@@ -328,15 +328,15 @@ class TestTuple:
 
 class TestStringInterpolation:
     def test_basic_interpolation(self):
-        r = evaluate('n is 42\nx is "value: {self.n}"')
+        r = evaluate('n is 42\nx is "value: {n}"')
         assert r["x"] == "value: 42"
 
     def test_undefined_interpolation_error(self):
         with pytest.raises(UzonRuntimeError, match="interpolate undefined"):
-            evaluate('x is "val: {self.missing}"')
+            evaluate('x is "val: {missing}"')
 
     def test_multiple_interpolation(self):
-        r = evaluate('a is "hello"\nb is "world"\nc is "{self.a} {self.b}"')
+        r = evaluate('a is "hello"\nb is "world"\nc is "{a} {b}"')
         assert r["c"] == "hello world"
 
 
@@ -356,7 +356,7 @@ class TestIfExpr:
             evaluate("x is if 1 then 2 else 3")
 
     def test_if_with_self_ref(self):
-        r = evaluate("flag is true\nx is if self.flag then 10 else 20")
+        r = evaluate("flag is true\nx is if flag then 10 else 20")
         assert r["x"] == 10
 
 
@@ -374,7 +374,7 @@ class TestCaseExpr:
     def test_case_with_tagged_union(self):
         r = evaluate(
             'x is "hi" named s from n as i32, s as string\n'
-            'y is case self.x when named n then "number" when named s then "string" else "unknown"'
+            'y is case x when named n then "number" when named s then "string" else "unknown"'
         )
         assert r["y"] == "string"
 
@@ -455,11 +455,11 @@ class TestUnion:
         assert r["x"].value == 7
 
     def test_is_named(self):
-        r = evaluate("x is 7 named n from n as i32, s as string\ny is self.x is named n")
+        r = evaluate("x is 7 named n from n as i32, s as string\ny is x is named n")
         assert r["y"] is True
 
     def test_is_not_named(self):
-        r = evaluate("x is 7 named n from n as i32, s as string\ny is self.x is not named s")
+        r = evaluate("x is 7 named n from n as i32, s as string\ny is x is not named s")
         assert r["y"] is True
 
 
@@ -467,26 +467,26 @@ class TestUnion:
 
 class TestFunctions:
     def test_basic_function(self):
-        r = evaluate("f is function n as i32 returns i32 { n + 1 }\nx is self.f(5)")
+        r = evaluate("f is function n as i32 returns i32 { n + 1 }\nx is f(5)")
         assert r["x"] == 6
 
     def test_function_multiple_args(self):
-        r = evaluate("f is function a as i32, b as i32 returns i32 { a + b }\nx is self.f(3, 4)")
+        r = evaluate("f is function a as i32, b as i32 returns i32 { a + b }\nx is f(3, 4)")
         assert r["x"] == 7
 
     def test_function_wrong_arg_type_error(self):
         with pytest.raises(UzonTypeError, match="type mismatch"):
-            evaluate('f is function n as i32 returns i32 { n }\nx is self.f("hello")')
+            evaluate('f is function n as i32 returns i32 { n }\nx is f("hello")')
 
     def test_function_wrong_return_type_error(self):
         with pytest.raises(UzonTypeError, match="return type mismatch"):
-            evaluate('f is function returns i32 { "hello" }\nx is self.f()')
+            evaluate('f is function returns i32 { "hello" }\nx is f()')
 
     def test_function_with_closure(self):
         r = evaluate(
             "factor is 10\n"
             "scale is function n as i64 returns i64 { n * factor }\n"
-            "y is self.scale(5)"
+            "y is scale(5)"
         )
         assert r["y"] == 50
 
@@ -508,7 +508,7 @@ class TestAreBinding:
 
 class TestFieldExtraction:
     def test_is_of(self):
-        r = evaluate("config is { port is 8080 }\nport is of self.config")
+        r = evaluate("config is { port is 8080 }\nport is of config")
         assert r["port"] == 8080
 
 
@@ -541,15 +541,15 @@ class TestConcatRepeat:
 
 class TestInOperator:
     def test_in_list(self):
-        r = evaluate("x is [1, 2, 3] as [i64]\ny is 2 in self.x")
+        r = evaluate("x is [1, 2, 3] as [i64]\ny is 2 in x")
         assert r["y"] is True
 
     def test_not_in_list(self):
-        r = evaluate("x is [1, 2, 3] as [i64]\ny is 5 in self.x")
+        r = evaluate("x is [1, 2, 3] as [i64]\ny is 5 in x")
         assert r["y"] is False
 
     def test_in_struct(self):
-        r = evaluate('x is { a is 1 }\ny is "a" in std.keys(self.x)')
+        r = evaluate('x is { a is 1 }\ny is "a" in std.keys(x)')
         assert r["y"] is True
 
 
@@ -586,7 +586,7 @@ class TestCalled:
 
 class TestStdLibrary:
     def test_std_len_list(self):
-        r = evaluate("x is [1, 2, 3] as [i64]\ny is std.len(self.x)")
+        r = evaluate("x is [1, 2, 3] as [i64]\ny is std.len(x)")
         assert r["y"] == 3
 
     def test_std_len_string(self):
@@ -594,23 +594,23 @@ class TestStdLibrary:
         assert r["x"] == 5
 
     def test_std_has_list(self):
-        r = evaluate("x is [1, 2, 3] as [i64]\ny is std.has(self.x, 2)")
+        r = evaluate("x is [1, 2, 3] as [i64]\ny is std.has(x, 2)")
         assert r["y"] is True
 
     def test_std_has_struct(self):
-        r = evaluate('x is { a is 1 }\ny is std.has(self.x, "a")')
+        r = evaluate('x is { a is 1 }\ny is std.has(x, "a")')
         assert r["y"] is True
 
     def test_std_get_list(self):
-        r = evaluate("x is [10, 20, 30] as [i64]\ny is std.get(self.x, 1)")
+        r = evaluate("x is [10, 20, 30] as [i64]\ny is std.get(x, 1)")
         assert r["y"] == 20
 
     def test_std_keys(self):
-        r = evaluate("x is { a is 1, b is 2 }\ny is std.keys(self.x)")
+        r = evaluate("x is { a is 1, b is 2 }\ny is std.keys(x)")
         assert set(r["y"]) == {"a", "b"}
 
     def test_std_values(self):
-        r = evaluate("x is { a is 1, b is 2 }\ny is std.values(self.x)")
+        r = evaluate("x is { a is 1, b is 2 }\ny is std.values(x)")
         assert set(r["y"]) == {1, 2}
 
     def test_std_trim(self):
@@ -618,7 +618,7 @@ class TestStdLibrary:
         assert r["x"] == "hello"
 
     def test_std_join(self):
-        r = evaluate('parts are "a", "b", "c"\nx is std.join(self.parts, "-")')
+        r = evaluate('parts are "a", "b", "c"\nx is std.join(parts, "-")')
         assert r["x"] == "a-b-c"
 
     def test_std_replace(self):
@@ -632,28 +632,28 @@ class TestStdLibrary:
     def test_std_map(self):
         r = evaluate(
             "xs is [1, 2, 3] as [i64]\n"
-            "ys is std.map(self.xs, function x as i64 returns i64 { x * 2 })"
+            "ys is std.map(xs, function x as i64 returns i64 { x * 2 })"
         )
         assert r["ys"] == [2, 4, 6]
 
     def test_std_filter(self):
         r = evaluate(
             "xs is [1, 2, 3, 4] as [i64]\n"
-            "ys is std.filter(self.xs, function x as i64 returns bool { x > 2 })"
+            "ys is std.filter(xs, function x as i64 returns bool { x > 2 })"
         )
         assert r["ys"] == [3, 4]
 
     def test_std_reduce(self):
         r = evaluate(
             "xs is [1, 2, 3, 4] as [i64]\n"
-            "sum is std.reduce(self.xs, 0, function acc as i64, x as i64 returns i64 { acc + x })"
+            "sum is std.reduce(xs, 0, function acc as i64, x as i64 returns i64 { acc + x })"
         )
         assert r["sum"] == 10
 
     def test_std_sort(self):
         r = evaluate(
             "xs is [3, 1, 2] as [i64]\n"
-            "sorted is std.sort(self.xs, function a as i64, b as i64 returns bool { a < b })"
+            "sorted is std.sort(xs, function a as i64, b as i64 returns bool { a < b })"
         )
         assert r["sorted"] == [1, 2, 3]
 
@@ -694,11 +694,11 @@ class TestStdLibrary:
             evaluate("x is std.upper(true)")
 
     def test_std_get_struct(self):
-        r = evaluate('x is { a is 1 }\ny is std.get(self.x, "a")')
+        r = evaluate('x is { a is 1 }\ny is std.get(x, "a")')
         assert r["y"] == 1
 
     def test_std_get_out_of_bounds(self):
-        r = evaluate("x is [1, 2] as [i64]\ny is std.get(self.x, 10) or else -1")
+        r = evaluate("x is [1, 2] as [i64]\ny is std.get(x, 10) or else -1")
         assert r["y"] == -1
 
 
@@ -710,11 +710,11 @@ class TestUndefined:
             evaluate("x is undefined")
 
     def test_undefined_propagation(self):
-        r = evaluate("x is self.missing or else 42")
+        r = evaluate("x is missing or else 42")
         assert r["x"] == 42
 
     def test_undefined_member_access(self):
-        r = evaluate("s is { a is 1 }\nx is self.s.missing or else 0")
+        r = evaluate("s is { a is 1 }\nx is s.missing or else 0")
         assert r["x"] == 0
 
 

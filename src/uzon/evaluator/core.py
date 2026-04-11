@@ -16,13 +16,12 @@ from ..ast_nodes import (
     Document, EnvRef, FieldExtraction, FloatLiteral, FromEnum, FromUnion,
     FunctionCall, FunctionExpr, Grouping, Identifier, IfExpr, InfLiteral,
     IntegerLiteral, ListLiteral, MemberAccess, NamedVariant, NanLiteral,
-    Node, NullLiteral, OrElse, SelfRef, StringLiteral, StructImport,
+    Node, NullLiteral, OrElse, StringLiteral, StructImport,
     StructLiteral, StructExtension, StructOverride, TupleLiteral,
     TypeAnnotation, UnaryOp, UndefinedLiteral,
 )
 from ..errors import UzonRuntimeError, UzonSyntaxError, UzonTypeError
 from ..scope import Scope
-from ..tokens import ALL_KEYWORDS
 from ..types import UzonFloat, UzonInt, UzonUndefined
 from ._constants import I64_MIN, I64_MAX, SPECULATIVE_FAILED
 from ._control import ControlMixin
@@ -96,15 +95,15 @@ class Evaluator(
             if isinstance(b, Binding) and isinstance(b.value, FunctionExpr):
                 body_refs: set[str] = set()
                 for body_b in b.value.body_bindings:
-                    self._collect_self_refs(body_b.value, body_refs)
-                self._collect_self_refs(b.value.body_expr, body_refs)
+                    self._collect_bare_refs(body_b.value, body_refs)
+                self._collect_bare_refs(b.value.body_expr, body_refs)
                 if b.name in body_refs:
                     raise UzonTypeError(
                         "Recursive function call detected — call graph must be a DAG",
                         b.line, b.col, file=self._filename,
                     )
 
-        deps = self._build_dependencies(bindings, scope)
+        deps = self._build_dependencies(bindings)
         order = self._topological_sort(bindings, deps)
 
         for b in order:
@@ -202,14 +201,6 @@ class Evaluator(
 
     # ── helpers ──────────────────────────────────────────────────────────
 
-    @staticmethod
-    def _did_you_mean_keyword(name: str) -> str | None:
-        """Return a keyword if `name` is a case variant (e.g. True → true)."""
-        lower = name.lower()
-        if lower != name and lower in ALL_KEYWORDS:
-            return lower
-        return None
-
     # ── node evaluation ────────────────────────────────────────────────
 
     def _eval_node(self, node: Node, scope: Scope, exclude: str | None = None) -> Any:
@@ -245,13 +236,6 @@ class Evaluator(
 
         if isinstance(node, NanLiteral):
             return UzonFloat(float("nan"), "f64", adoptable=True)
-
-        # §5.12: self / env must be followed by .name
-        if isinstance(node, SelfRef):
-            raise UzonTypeError(
-                "'self' must be followed by .name", node.line, node.col,
-                file=self._filename,
-            )
 
         if isinstance(node, EnvRef):
             raise UzonTypeError(
@@ -368,19 +352,10 @@ class Evaluator(
         if isinstance(node, FunctionCall):
             return self._eval_function_call(node, scope, exclude)
 
-        # §5.12: Identifier lookup
+        # §5.12: Identifier lookup via lexical scope chain
         if isinstance(node, Identifier):
-            if scope.has(node.name):
-                return scope.get(node.name)
-            hint = self._did_you_mean_keyword(node.name)
-            msg = f"Bare identifier '{node.name}'"
-            if hint:
-                msg += f" — did you mean '{hint}'?"
-            else:
-                msg += f" — use self.{node.name} to reference a binding"
-            raise UzonRuntimeError(
-                msg, node.line, node.col, file=self._filename,
-            )
+            value = scope.get(node.name, exclude=exclude)
+            return value
 
         raise UzonRuntimeError(
             f"Evaluation not yet implemented for {type(node).__name__}",

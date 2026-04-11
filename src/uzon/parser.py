@@ -14,7 +14,7 @@ from .ast_nodes import (
     Document, EnvRef, FieldExtraction, FloatLiteral, FromEnum, FromUnion,
     FunctionCall, FunctionExpr, FunctionParam, Grouping, Identifier,
     IfExpr, InfLiteral, IntegerLiteral, ListLiteral, MemberAccess,
-    NamedVariant, NanLiteral, Node, NullLiteral, OrElse, SelfRef,
+    NamedVariant, NanLiteral, Node, NullLiteral, OrElse,
     StringLiteral, StructExtension, StructImport, StructLiteral,
     StructOverride, TupleLiteral, TypeAnnotation, TypeExpr, UnaryOp,
     UndefinedLiteral, WhenClause,
@@ -564,8 +564,7 @@ class Parser:
             self._advance()
             return NanLiteral(line=tok.line, col=tok.col)
         if tok.type == TokenType.SELF:
-            self._advance()
-            return SelfRef(line=tok.line, col=tok.col)
+            raise self._error("'self' is a reserved keyword and cannot be used")
         if tok.type == TokenType.ENV:
             self._advance()
             return EnvRef(line=tok.line, col=tok.col)
