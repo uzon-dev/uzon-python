@@ -16,7 +16,7 @@ from ..ast_nodes import (
 from ..errors import UzonSyntaxError, UzonTypeError
 from ..scope import Scope
 from ..types import (
-    UzonEnum, UzonFloat, UzonFunction, UzonInt,
+    UzonEnum, UzonFloat, UzonFunction, UzonInt, UzonStruct,
     UzonTaggedUnion, UzonTypedList, UzonUndefined, UzonUnion,
 )
 from ._constants import FLOAT_TYPES, INT_TYPE_RE
@@ -29,8 +29,11 @@ class TypeAnnotationMixin:
 
     def _register_called(
         self, type_name: str, value: Any, binding: Binding | AreBinding, scope: Scope
-    ) -> None:
-        """§6.2: Register a named type via `called`."""
+    ) -> Any:
+        """§6.2: Register a named type via `called`.
+
+        Returns the (possibly wrapped) value — dicts become UzonStruct.
+        """
         if scope.has_own_type(type_name):
             raise UzonSyntaxError(
                 f"Duplicate type name '{type_name}' in same scope",
@@ -58,15 +61,27 @@ class TypeAnnotationMixin:
             type_info["kind"] = "struct"
             type_info["fields"] = set(value.keys())
             type_info["field_values"] = dict(value)
+            if not isinstance(value, UzonStruct):
+                value = UzonStruct(value, type_name)
+            else:
+                value.type_name = type_name
+            # Keep _called_of as secondary index for scope_of lookups
             self._called_of[id(value)] = type_name
         elif isinstance(value, list):
             type_info["kind"] = "list"
-            for elem in value:
-                if isinstance(elem, dict):
+            for i, elem in enumerate(value):
+                if isinstance(elem, dict) and not isinstance(elem, UzonStruct):
+                    value[i] = UzonStruct(elem, type_name)
+                    self._called_of[id(value[i])] = type_name
+                elif isinstance(elem, UzonStruct):
+                    elem.type_name = type_name
+                    self._called_of[id(elem)] = type_name
+                elif isinstance(elem, dict):
                     self._called_of[id(elem)] = type_name
         else:
             type_info["kind"] = "value"
         scope.define_type(type_name, type_info)
+        return value
 
     # ── type annotation (as) — §6.1 ──────────────────────────────────
 

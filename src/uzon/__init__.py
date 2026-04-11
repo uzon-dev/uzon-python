@@ -14,10 +14,13 @@ from .lexer import Lexer
 from .parser import Parser
 from .types import (
     UzonBuiltinFunction, UzonEnum, UzonFloat, UzonFunction, UzonInt,
-    UzonTaggedUnion, UzonTypedList, UzonUndefined, UzonUnion,
+    UzonStruct, UzonTaggedUnion, UzonTypedList, UzonUndefined, UzonUnion,
 )
+from .val import _ValFactory
 
 __version__ = "0.5.0"
+
+val = _ValFactory()
 
 __all__ = [
     # Core API
@@ -26,6 +29,7 @@ __all__ = [
     "load",
     "dump",
     "json_default",
+    "val",
     # Errors
     "UzonSyntaxError",
     "UzonTypeError",
@@ -36,6 +40,7 @@ __all__ = [
     "UzonFloat",
     "UzonEnum",
     "UzonUnion",
+    "UzonStruct",
     "UzonTaggedUnion",
     "UzonUndefined",
 ]

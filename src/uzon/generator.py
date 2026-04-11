@@ -13,7 +13,7 @@ from ._format import format_float as _format_float
 from .tokens import ALL_KEYWORDS
 from .types import (
     UzonBuiltinFunction, UzonEnum, UzonFloat, UzonFunction,
-    UzonInt, UzonTaggedUnion, UzonTypedList, UzonUndefined, UzonUnion,
+    UzonInt, UzonStruct, UzonTaggedUnion, UzonTypedList, UzonUndefined, UzonUnion,
 )
 
 # §2.3: Characters that require a quoted identifier
@@ -91,6 +91,12 @@ class _Generator:
             return self._emit_float(val)
         if isinstance(val, str):
             return self._emit_string(val)
+        if isinstance(val, UzonStruct) and val.type_name:
+            struct_str = self._emit_struct(val, level)
+            if val.type_name in self._emitted_types or in_collection:
+                return f"{struct_str} as {val.type_name}"
+            self._emitted_types.add(val.type_name)
+            return f"{struct_str} called {val.type_name}"
         if isinstance(val, dict):
             return self._emit_struct(val, level)
         if isinstance(val, list):
