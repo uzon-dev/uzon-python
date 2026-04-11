@@ -22,6 +22,7 @@ from ..ast_nodes import (
 )
 from ..errors import UzonRuntimeError, UzonSyntaxError, UzonTypeError
 from ..scope import Scope
+from ..tokens import ALL_KEYWORDS
 from ..types import UzonFloat, UzonInt, UzonUndefined
 from ._constants import I64_MIN, I64_MAX, SPECULATIVE_FAILED
 from ._control import ControlMixin
@@ -199,6 +200,16 @@ class Evaluator(
                 elements[i] = self._wrap_typed(elem, elem_type)
         return elements
 
+    # ── helpers ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _did_you_mean_keyword(name: str) -> str | None:
+        """Return a keyword if `name` is a case variant (e.g. True → true)."""
+        lower = name.lower()
+        if lower != name and lower in ALL_KEYWORDS:
+            return lower
+        return None
+
     # ── node evaluation ────────────────────────────────────────────────
 
     def _eval_node(self, node: Node, scope: Scope, exclude: str | None = None) -> Any:
@@ -361,9 +372,14 @@ class Evaluator(
         if isinstance(node, Identifier):
             if scope.has(node.name):
                 return scope.get(node.name)
+            hint = self._did_you_mean_keyword(node.name)
+            msg = f"Bare identifier '{node.name}'"
+            if hint:
+                msg += f" — did you mean '{hint}'?"
+            else:
+                msg += f" — use self.{node.name} to reference a binding"
             raise UzonRuntimeError(
-                f"Bare identifier '{node.name}' — use self.{node.name} to reference a binding",
-                node.line, node.col, file=self._filename,
+                msg, node.line, node.col, file=self._filename,
             )
 
         raise UzonRuntimeError(
