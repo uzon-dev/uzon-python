@@ -74,10 +74,6 @@ class Identifier(Node):
 # ── References (§5.12, §5.13) ──────────────────────────────────────
 
 @dataclass
-class SelfRef(Node):
-    """§5.12: The ``self`` keyword — lexical scope reference."""
-
-@dataclass
 class EnvRef(Node):
     """§5.13: The ``env`` keyword — environment variable access."""
 
