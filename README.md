@@ -88,24 +88,24 @@ server is {
 }
 
 // Lists
-tags are ["web", "api", "v2"]
-matrix is [[1, 2], [3, 4]]
+tags are "web", "api", "v2"
+matrix is [ [ 1, 2 ], [ 3, 4 ] ]
 
 // Tuples
 point is (10, 20)
 
 // Enums
-color is Red | Green | Blue
+color is Red from Red, Green, Blue
 
 // Tagged unions
-result is Ok("success") | Err("failed")
+result is "success" named Ok from Ok as string, Err as string
 
 // Functions
-double is fn(x: i32) -> i32 { x * 2 }
+double is function x as i32 returns i32 { x * 2 }
 
 // Expressions
 total is price * quantity
-greeting is "Hello, " + name
+greeting is "Hello, " ++ name
 
 // Copy-and-update
 dev_server is server with { port is 3000 as u16 }
@@ -896,7 +896,7 @@ assert scores[0] == 95
 class UzonFunction
 ```
 
-Function value — a closure capturing its definition scope. Produced when parsing `fn(params) -> ReturnType { body }` expressions.
+Function value — a closure capturing its definition scope. Produced when parsing `function param as Type returns Type { body }` expressions.
 
 **Attributes:**
 
@@ -912,7 +912,7 @@ Function value — a closure capturing its definition scope. Produced when parsi
 Functions are not directly callable from Python — they are evaluated within UZON expressions.
 
 ```python
-data = uzon.loads('double is fn(x: i32) -> i32 { x * 2 }, result is double(21)')
+data = uzon.loads('double is function x as i32 returns i32 { x * 2 }, result is double(21)')
 assert isinstance(data["double"], uzon.UzonFunction)
 assert data["result"] == 42
 ```
