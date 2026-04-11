@@ -16,7 +16,7 @@ from ..errors import UzonRuntimeError, UzonTypeError
 from ..scope import Scope
 from ..types import (
     UzonBuiltinFunction, UzonEnum, UzonFloat, UzonFunction,
-    UzonInt, UzonTaggedUnion, UzonUndefined, UzonUnion,
+    UzonInt, UzonStruct, UzonTaggedUnion, UzonUndefined, UzonUnion,
 )
 from ._constants import FLOAT_TYPES, INT_TYPE_RE, SIMPLE_TYPES
 
@@ -205,6 +205,8 @@ class TypeChecksMixin:
                             f"expected {self._type_name(orig_val)}, got {self._type_name(new_val)}",
                             node.line, node.col, file=self._filename,
                         )
+        if isinstance(value, UzonStruct):
+            value.type_name = type_name
         self._called_of[id(value)] = type_name
 
     def _check_function_assertion(
@@ -396,8 +398,8 @@ class TypeChecksMixin:
             return all(x is None or y is None or self._same_uzon_type(x, y, for_homogeneity=for_homogeneity)
                        for x, y in zip(a, b))
         if isinstance(a, dict) and isinstance(b, dict):
-            a_type = self._called_of.get(id(a))
-            b_type = self._called_of.get(id(b))
+            a_type = a.type_name if isinstance(a, UzonStruct) else self._called_of.get(id(a))
+            b_type = b.type_name if isinstance(b, UzonStruct) else self._called_of.get(id(b))
             if a_type and b_type:
                 return a_type == b_type
             if a_type or b_type:
@@ -450,6 +452,8 @@ class TypeChecksMixin:
         if isinstance(val, str):
             return "string"
         if isinstance(val, dict):
+            if isinstance(val, UzonStruct) and val.type_name:
+                return val.type_name
             called = self._called_of.get(id(val))
             return called if called else "struct"
         if isinstance(val, list):

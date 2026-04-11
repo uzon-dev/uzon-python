@@ -149,7 +149,7 @@ class Evaluator(
             )
 
         if b.called:
-            self._register_called(b.called, value, b, scope)
+            value = self._register_called(b.called, value, b, scope)
         return value
 
     def _eval_are_binding(self, b: AreBinding, scope: Scope) -> list:
@@ -172,7 +172,7 @@ class Evaluator(
         if b.type_annotation:
             elements = self._apply_are_type_annotation(elements, b, scope)
         if b.called:
-            self._register_called(b.called, elements, b, scope)
+            elements = self._register_called(b.called, elements, b, scope)
         return elements
 
     def _apply_are_type_annotation(

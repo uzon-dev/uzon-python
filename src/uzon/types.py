@@ -180,6 +180,32 @@ for _op in (
 # ── collection types ───────────────────────────────────────────
 
 
+class UzonStruct(dict):
+    """Dict subclass that preserves a named type annotation for round-trip fidelity.
+
+    Used when a struct has an explicit ``called TypeName`` annotation (§6.2),
+    so the generator can re-emit the type name.
+    """
+
+    type_name: str | None
+
+    def __init__(self, mapping: dict | None = None, type_name: str | None = None, **kwargs):
+        super().__init__(mapping or {}, **kwargs)
+        self.type_name = type_name
+
+    def __repr__(self) -> str:
+        return f"UzonStruct({dict.__repr__(self)}, type_name={self.type_name!r})"
+
+    def __copy__(self) -> UzonStruct:
+        return UzonStruct(dict(self), self.type_name)
+
+    def __deepcopy__(self, memo: dict) -> UzonStruct:
+        return UzonStruct(
+            {k: _copy.deepcopy(v, memo) for k, v in self.items()},
+            self.type_name,
+        )
+
+
 class UzonTypedList(list):
     """List that preserves element type annotation for round-trip fidelity.
 

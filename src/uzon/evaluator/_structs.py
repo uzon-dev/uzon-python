@@ -18,7 +18,7 @@ from ..ast_nodes import (
 )
 from ..errors import UzonCircularError, UzonError, UzonRuntimeError, UzonTypeError
 from ..scope import Scope
-from ..types import UzonFloat, UzonInt, UzonTaggedUnion, UzonUndefined
+from ..types import UzonFloat, UzonInt, UzonStruct, UzonTaggedUnion, UzonUndefined
 from ._constants import INT_TYPE_RE
 
 
@@ -156,11 +156,16 @@ class StructMixin:
             value = self._check_override_compat(base[name], value, name, "with", field)
             overrides[name] = value
 
-        result = dict(base)
-        result.update(overrides)
-        base_type = self._called_of.get(id(base))
-        if base_type:
-            self._called_of[id(result)] = base_type
+        if isinstance(base, UzonStruct) and base.type_name:
+            result = UzonStruct(base, base.type_name)
+            result.update(overrides)
+            self._called_of[id(result)] = base.type_name
+        else:
+            result = dict(base)
+            result.update(overrides)
+            base_type = self._called_of.get(id(base))
+            if base_type:
+                self._called_of[id(result)] = base_type
         return result
 
     # ── struct extension (§3.2.2) ────────────────────────────────────
