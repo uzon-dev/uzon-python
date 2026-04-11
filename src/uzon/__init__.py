@@ -12,7 +12,10 @@ from .evaluator import Evaluator
 from .generator import generate
 from .lexer import Lexer
 from .parser import Parser
-from .types import UzonEnum, UzonFloat, UzonInt, UzonTaggedUnion, UzonTypedList, UzonUndefined, UzonUnion
+from .types import (
+    UzonBuiltinFunction, UzonEnum, UzonFloat, UzonFunction, UzonInt,
+    UzonTaggedUnion, UzonTypedList, UzonUndefined, UzonUnion,
+)
 
 __version__ = "0.5.0"
 
@@ -22,12 +25,15 @@ __all__ = [
     "dumps",
     "load",
     "dump",
+    "json_default",
     # Errors
     "UzonSyntaxError",
     "UzonTypeError",
     "UzonRuntimeError",
     "UzonCircularError",
     # Types
+    "UzonInt",
+    "UzonFloat",
     "UzonEnum",
     "UzonUnion",
     "UzonTaggedUnion",
@@ -119,3 +125,36 @@ def _to_plain(value: Any) -> Any:
     if isinstance(value, tuple):
         return tuple(_to_plain(v) for v in value)
     return value
+
+
+# ── JSON serialization ────────────────────────────────────────────
+
+
+def json_default(obj: Any) -> Any:
+    """JSON serialization hook for UZON types.
+
+    Usage::
+
+        import json, uzon
+        data = uzon.loads(text)
+        json.dumps(data, default=uzon.json_default)
+
+    Mapping:
+        UzonInt / UzonFloat → number (handled natively by json)
+        UzonEnum → string (variant name)
+        UzonUnion → inner value (recursive)
+        UzonTaggedUnion → ``{"_tag": str, "_value": ...}``
+        UzonUndefined → None
+        UzonFunction → raises TypeError
+    """
+    if isinstance(obj, UzonEnum):
+        return obj.value
+    if isinstance(obj, UzonUnion):
+        return obj.value
+    if isinstance(obj, UzonTaggedUnion):
+        return {"_tag": obj.tag, "_value": obj.value}
+    if obj is UzonUndefined:
+        return None
+    if isinstance(obj, (UzonFunction, UzonBuiltinFunction)):
+        raise TypeError(f"UZON {type(obj).__name__} is not JSON serializable")
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
