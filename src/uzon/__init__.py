@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: © 2026 Suho Kang
 # SPDX-License-Identifier: MIT
-"""UZON parser and generator for Python — spec v0.5."""
+"""UZON parser and generator for Python — spec v0.6."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from .types import (
 )
 from .val import _ValFactory
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 val = _ValFactory()
 

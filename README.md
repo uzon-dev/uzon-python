@@ -1,6 +1,6 @@
 # uzon
 
-A Python parser and generator for the [UZON](https://uzon.dev) typed data expression format — spec v0.5.
+A Python parser and generator for the [UZON](https://uzon.dev) typed data expression format — spec v0.6.
 
 ```python
 import uzon
@@ -18,7 +18,7 @@ print(data["server"]["port"])   # UzonInt(8080, 'u16')
 
 ```python
 >>> uzon.__version__
-'0.5.0'
+'0.6.0'
 ```
 
 ## Installation
@@ -58,7 +58,7 @@ merged = uzon.merge(base, override)
 
 # JSON serialization
 import json
-data = uzon.loads('color is Red | Green | Blue')
+data = uzon.loads('color is red from red, green, blue')
 json.dumps(data, default=uzon.json_default)
 
 # Create typed values from Python
@@ -95,17 +95,31 @@ matrix is [ [ 1, 2 ], [ 3, 4 ] ]
 point is (10, 20)
 
 // Enums
-color is Red from Red, Green, Blue
+color is red from red, green, blue called RGB
+
+// Unions
+value is 42 from union i32, f64, string
 
 // Tagged unions
-result is "success" named Ok from Ok as string, Err as string
+result is "success" named ok from ok as string, err as string called Result
 
 // Functions
 double is function x as i32 returns i32 { x * 2 }
 
+// Standard library
+evens is std.filter([ 1, 2, 3, 4 ], function n as i64 returns bool { n % 2 is 0 })
+upper is std.upper("hello")
+
 // Expressions
 total is price * quantity
 greeting is "Hello, " ++ name
+
+// Conditionals
+mode is if debug then "verbose" else "quiet"
+label is case color
+    when red then "Red"
+    when green then "Green"
+    else "Blue"
 
 // Copy-and-update
 dev_server is server with { port is 3000 as u16 }
@@ -113,8 +127,11 @@ dev_server is server with { port is 3000 as u16 }
 // Extension
 extended is server extends { timeout is 30 }
 
+// Environment variables
+host is env.HOST or else "localhost"
+
 // File imports
-db is struct "database.uzon"
+db is struct "database"
 ```
 
 See the full [UZON specification](https://uzon.dev) for details.
@@ -145,7 +162,7 @@ def loads(text: str, *, plain: bool = False) -> dict[str, Any]
 **Raises:**
 - `UzonSyntaxError` — Invalid UZON syntax.
 - `UzonTypeError` — Type annotation or compatibility error.
-- `UzonRuntimeError` — Evaluation error (e.g. undefined variable, overflow).
+- `UzonRuntimeError` — Evaluation error (e.g. undefined in arithmetic, overflow).
 - `UzonCircularError` — Circular dependency between bindings.
 
 **Examples:**
@@ -187,7 +204,7 @@ def dumps(value: dict[str, Any], *, indent: int = 4) -> str
 | `value` | `dict[str, Any]` | *(required)* | A dict representing a UZON document. |
 | `indent` | `int` | `4` | Number of spaces per indentation level. |
 
-**Returns:** `str` — UZON source text.
+**Returns:** `str` ��� UZON source text.
 
 **Examples:**
 
@@ -386,13 +403,13 @@ def json_default(obj: Any) -> Any
 import json
 
 data = uzon.loads('''
-    color is Red | Green | Blue
-    result is Ok(42) | Err("fail")
+    color is red from red, green, blue
+    result is "ok" named ok from ok as string, err as string called Result
     port is 8080 as u16
 ''')
 
 text = json.dumps(data, default=uzon.json_default)
-# {"color": "Red", "result": {"_tag": "Ok", "_value": 42}, "port": 8080}
+# {"color": "red", "result": {"_tag": "ok", "_value": "ok"}, "port": 8080}
 ```
 
 ---
@@ -514,9 +531,9 @@ def enum(
 **Examples:**
 
 ```python
-color = uzon.val.enum("Red", ["Red", "Green", "Blue"], type_name="Color")
-assert color.value == "Red"
-assert color == "Red"  # compares with str
+color = uzon.val.enum("red", ["red", "green", "blue"], type_name="RGB")
+assert color.value == "red"
+assert color == "red"  # compares with str
 ```
 
 #### `val.union(value, types, *, type_name=None)`
@@ -578,11 +595,11 @@ def tagged(
 
 ```python
 result = uzon.val.tagged(
-    "Ok", "done",
-    {"Ok": "string", "Err": "string"},
+    "ok", "done",
+    {"ok": "string", "err": "string"},
     type_name="Result",
 )
-assert result.tag == "Ok"
+assert result.tag == "ok"
 assert result.value == "done"
 ```
 
@@ -625,8 +642,8 @@ UzonInt(value: int, type_name: str, *, adoptable: bool = False)
 - `to_plain() -> int` — Return the underlying plain `int`.
 
 **String representations:**
-- `repr(x)` → `UzonInt(10, 'i32')`
-- `str(x)` → `10` (plain integer string)
+- `repr(x)` -> `UzonInt(10, 'i32')`
+- `str(x)` -> `10` (plain integer string)
 
 **Arithmetic:** All arithmetic operators (`+`, `-`, `*`, `//`, `%`, `**`, `&`, `|`, `^`, `<<`, `>>`, unary `-`/`+`/`abs`/`~`, `round`) return `UzonInt` with the same `type_name`. If the result overflows the type's range, `OverflowError` is raised.
 
@@ -668,8 +685,8 @@ UzonFloat(value: float, type_name: str, *, adoptable: bool = False)
 - `to_plain() -> float` — Return the underlying plain `float`.
 
 **String representations:**
-- `repr(x)` → `UzonFloat(1.5, 'f32')`
-- `str(x)` → `1.5` (plain float string)
+- `repr(x)` -> `UzonFloat(1.5, 'f32')`
+- `str(x)` -> `1.5` (plain float string)
 
 **Arithmetic:** Operators `+`, `-`, `*`, `/`, `//`, `%`, `**`, unary `-`/`+`/`abs`, `round` return `UzonFloat` with the same `type_name`. Bitwise operators (`&`, `|`, `^`, `<<`, `>>`, `~`) are not supported on floats.
 
@@ -708,23 +725,23 @@ UzonEnum(value: str, variants: list[str], type_name: str | None = None)
 - `to_plain() -> str` — Return the variant name as a plain string.
 
 **String representations:**
-- `repr(x)` → `UzonEnum('Red', type=Color)`
-- `str(x)` → `Red` (variant name)
+- `repr(x)` -> `UzonEnum('red', type=RGB)`
+- `str(x)` -> `red` (variant name)
 
 **Equality:** Compares equal to other `UzonEnum` with the same `value` and `type_name`, or to a plain `str` matching `value`. Hashable.
 
 **Pattern matching (Python 3.10+):** `__match_args__ = ("value",)`
 
 ```python
-data = uzon.loads('color is Red | Green | Blue')
+data = uzon.loads('color is red from red, green, blue called RGB')
 color = data["color"]
-assert color == "Red"        # compare with str
-assert color.value == "Red"
-assert color.variants == ["Red", "Green", "Blue"]
-print(f"Color: {color}")     # "Color: Red"
+assert color == "red"        # compare with str
+assert color.value == "red"
+assert color.variants == ["red", "green", "blue"]
+print(f"Color: {color}")     # "Color: red"
 
 match color:
-    case UzonEnum("Red"):
+    case UzonEnum("red"):
         print("got red")
 ```
 
@@ -762,10 +779,10 @@ UzonUnion(value: Any, types: list[str], type_name: str | None = None)
 **Pattern matching (Python 3.10+):** `__match_args__ = ("value",)`
 
 ```python
-data = uzon.loads('value is 42 as i32 | string')
+data = uzon.loads('value is 42 from union i32, f64, string')
 v = data["value"]
 assert v == 42
-assert v.types == ["i32", "string"]
+assert v.types == ["i32", "f64", "string"]
 
 match v:
     case UzonUnion(int(n)):
@@ -801,8 +818,8 @@ UzonTaggedUnion(value: Any, tag: str, variants: dict[str, str | None], type_name
 - `to_plain() -> Any` — Return the inner value.
 
 **String representations:**
-- `repr(x)` → `UzonTaggedUnion(42, tag='Ok', type=Result)`
-- `str(x)` → `42` (inner value's string)
+- `repr(x)` -> `UzonTaggedUnion('ok', tag='ok', type=Result)`
+- `str(x)` -> `ok` (inner value's string)
 
 **Transparent access:** `[]`, `len()`, `iter()`, `in` delegate to the inner value.
 
@@ -811,11 +828,13 @@ UzonTaggedUnion(value: Any, tag: str, variants: dict[str, str | None], type_name
 **Pattern matching (Python 3.10+):** `__match_args__ = ("tag", "value")`
 
 ```python
-data = uzon.loads('result is Ok(42) | Err("fail")')
+data = uzon.loads('''
+    result is "ok" named ok from ok as string, err as string called Result
+''')
 match data["result"]:
-    case UzonTaggedUnion(tag="Ok", value=v):
+    case UzonTaggedUnion(tag="ok", value=v):
         print(f"Success: {v}")
-    case UzonTaggedUnion(tag="Err", value=e):
+    case UzonTaggedUnion(tag="err", value=e):
         print(f"Error: {e}")
 ```
 
@@ -949,16 +968,21 @@ assert isinstance(data["my_len"], uzon.UzonBuiltinFunction)
 UzonUndefined: _UzonUndefinedType
 ```
 
-Singleton sentinel representing UZON's undefined state — the absence of a value. Distinct from `None` (`null` in UZON).
+Singleton sentinel representing UZON's undefined state — the absence of a value. Distinct from `None` (`null` in UZON). In UZON, `undefined` results from accessing unbound names, unset environment variables, or out-of-bounds indices.
 
 - `bool(UzonUndefined)` is `False`.
 - Safe for identity comparison: `value is UzonUndefined`.
 - Copy-safe: `copy()` and `deepcopy()` return the same singleton.
 
 ```python
-data = uzon.loads('x is undefined')
+data = uzon.loads('x is missing_name or else 42')
+# missing_name evaluates to undefined, or else provides fallback
+assert data["x"] == 42
+
+# Undefined appears in results when not resolved
+data = uzon.loads('x is missing_name, y is x or else "fallback"')
 assert data["x"] is uzon.UzonUndefined
-assert not data["x"]  # falsy
+assert data["y"] == "fallback"
 ```
 
 ---
@@ -1019,7 +1043,7 @@ except uzon.UzonSyntaxError as e:
 class UzonTypeError(UzonError)
 ```
 
-Type annotation and compatibility errors — type mismatches in `as`, `with`, `extends`, or operations between incompatible typed values.
+Type annotation and compatibility errors — type mismatches in `as`, `with`, `extends`, branch type mismatch in `if`/`case`, or operations between incompatible types.
 
 ```python
 try:
@@ -1036,13 +1060,13 @@ except uzon.UzonTypeError as e:
 class UzonRuntimeError(UzonError)
 ```
 
-Evaluation errors — undefined variables, division by zero, integer overflow, import file not found.
+Evaluation errors — division by zero, integer overflow, undefined in arithmetic, string interpolation with undefined, import file not found.
 
 ```python
 try:
-    uzon.loads('x is y + 1')  # y is not defined
+    uzon.loads('x is 1 / 0')
 except uzon.UzonRuntimeError as e:
-    print(e)
+    print(e)  # division by zero
 ```
 
 ---
@@ -1083,13 +1107,13 @@ When `plain=True` is passed to `loads()` or `load()`, all type wrappers are recu
 ```python
 data = uzon.loads('''
     port is 8080 as u16
-    color is Red | Green | Blue
-    result is Ok(42) | Err("fail")
+    color is red from red, green, blue
+    result is "ok" named ok from ok as string, err as string
 ''', plain=True)
 
 assert type(data["port"]) is int           # not UzonInt
 assert type(data["color"]) is str           # not UzonEnum
-assert data["result"] == 42                 # unwrapped from TaggedUnion
+assert data["result"] == "ok"               # unwrapped from TaggedUnion
 ```
 
 ---
