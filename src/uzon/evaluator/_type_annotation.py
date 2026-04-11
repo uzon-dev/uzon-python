@@ -61,17 +61,23 @@ class TypeAnnotationMixin:
             type_info["kind"] = "struct"
             type_info["fields"] = set(value.keys())
             type_info["field_values"] = dict(value)
+            old_id = id(value)
             if not isinstance(value, UzonStruct):
                 value = UzonStruct(value, type_name)
             else:
                 value.type_name = type_name
-            # Keep _called_of as secondary index for scope_of lookups
+            # Migrate _scope_of from old dict id to new UzonStruct id
+            if old_id != id(value) and old_id in self._scope_of:
+                self._scope_of[id(value)] = self._scope_of.pop(old_id)
             self._called_of[id(value)] = type_name
         elif isinstance(value, list):
             type_info["kind"] = "list"
             for i, elem in enumerate(value):
+                old_elem_id = id(elem)
                 if isinstance(elem, dict) and not isinstance(elem, UzonStruct):
                     value[i] = UzonStruct(elem, type_name)
+                    if old_elem_id in self._scope_of:
+                        self._scope_of[id(value[i])] = self._scope_of.pop(old_elem_id)
                     self._called_of[id(value[i])] = type_name
                 elif isinstance(elem, UzonStruct):
                     elem.type_name = type_name

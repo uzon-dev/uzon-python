@@ -166,6 +166,10 @@ class StructMixin:
             base_type = self._called_of.get(id(base))
             if base_type:
                 self._called_of[id(result)] = base_type
+        # Propagate scope from base so nested type defs remain accessible
+        base_scope = self._scope_of.get(id(base))
+        if base_scope:
+            self._scope_of[id(result)] = base_scope
         return result
 
     # ── struct extension (§3.2.2) ────────────────────────────────────
@@ -216,9 +220,15 @@ class StructMixin:
                 node.line, node.col, file=self._filename,
             )
 
+        # Note: extends adds new fields, so the result is NOT the same type as base.
+        # We intentionally do NOT preserve base's type_name here — the shape changed.
         result = dict(base)
         result.update(overrides)
         result.update(additions)
+        # Propagate scope so nested type defs remain accessible
+        base_scope = self._scope_of.get(id(base))
+        if base_scope:
+            self._scope_of[id(result)] = base_scope
         return result
 
     # ── shared struct helpers ────────────────────────────────────────

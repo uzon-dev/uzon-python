@@ -55,7 +55,9 @@ class _ValFactory:
         if m:
             signed = m.group(1) == 'i'
             width = int(m.group(2))
-            if signed:
+            if width == 0:
+                lo, hi = 0, -1  # empty range — no value fits
+            elif signed:
                 lo, hi = -(1 << (width - 1)), (1 << (width - 1)) - 1
             else:
                 lo, hi = 0, (1 << width) - 1
