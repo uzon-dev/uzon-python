@@ -108,7 +108,7 @@ class StructMixin:
     def _eval_struct_literal(self, node: StructLiteral, scope: Scope) -> dict[str, Any]:
         """§3.2: Evaluate a struct literal into a dict with a child scope."""
         child_scope = Scope(parent=scope)
-        self._evaluate_bindings(node.fields, child_scope)
+        self._evaluate_bindings(node.fields, child_scope, struct_context=True)
         result = child_scope.to_dict()
         self._scope_of[id(result)] = child_scope
         return result

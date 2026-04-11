@@ -387,15 +387,16 @@ class TypeChecksMixin:
         if isinstance(a, tuple) and isinstance(b, tuple):
             if len(a) != len(b):
                 return False
-            return all(self._same_uzon_type(x, y) for x, y in zip(a, b))
+            return all(x is None or y is None or self._same_uzon_type(x, y)
+                       for x, y in zip(a, b))
         if isinstance(a, dict) and isinstance(b, dict):
             a_type = self._called_of.get(id(a))
             b_type = self._called_of.get(id(b))
             if a_type and b_type:
                 return a_type == b_type
-            if set(a.keys()) != set(b.keys()):
+            if a_type or b_type:
                 return False
-            return all(self._same_uzon_type(a[k], b[k]) for k in a)
+            return True
         if isinstance(a, list) and isinstance(b, list):
             a_rep = next((e for e in a if e is not None), None)
             b_rep = next((e for e in b if e is not None), None)
