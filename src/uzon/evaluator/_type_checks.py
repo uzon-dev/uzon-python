@@ -355,7 +355,7 @@ class TypeChecksMixin:
         if len(non_null) >= 2:
             first = non_null[0]
             for other in non_null[1:]:
-                if not self._same_uzon_type(first, other):
+                if not self._same_uzon_type(first, other, for_homogeneity=True):
                     raise UzonTypeError(
                         f"List elements must be same type, got {self._type_name(first)} and {self._type_name(other)}",
                         node.line, node.col, file=self._filename,
@@ -368,8 +368,14 @@ class TypeChecksMixin:
                 node.line, node.col, file=self._filename,
             )
 
-    def _same_uzon_type(self, a: Any, b: Any) -> bool:
-        """§5.2: Check if two values represent the same UZON type."""
+    def _same_uzon_type(self, a: Any, b: Any, *, for_homogeneity: bool = False) -> bool:
+        """§5.2: Check if two values represent the same UZON type.
+
+        Args:
+            for_homogeneity: When True (list homogeneity checks), anonymous structs
+                are always compatible. When False (comparison operators), anonymous
+                structs must have matching field shapes.
+        """
         if isinstance(a, bool) or isinstance(b, bool):
             return isinstance(a, bool) and isinstance(b, bool)
         if isinstance(a, int) and isinstance(b, int):
@@ -387,7 +393,7 @@ class TypeChecksMixin:
         if isinstance(a, tuple) and isinstance(b, tuple):
             if len(a) != len(b):
                 return False
-            return all(x is None or y is None or self._same_uzon_type(x, y)
+            return all(x is None or y is None or self._same_uzon_type(x, y, for_homogeneity=for_homogeneity)
                        for x, y in zip(a, b))
         if isinstance(a, dict) and isinstance(b, dict):
             a_type = self._called_of.get(id(a))
@@ -396,13 +402,20 @@ class TypeChecksMixin:
                 return a_type == b_type
             if a_type or b_type:
                 return False
-            return True
+            if for_homogeneity:
+                return True
+            if a.keys() != b.keys():
+                return False
+            return all(
+                va is None or vb is None or self._same_uzon_type(va, vb)
+                for va, vb in ((a[k], b[k]) for k in a)
+            )
         if isinstance(a, list) and isinstance(b, list):
             a_rep = next((e for e in a if e is not None), None)
             b_rep = next((e for e in b if e is not None), None)
             if a_rep is None or b_rep is None:
                 return True
-            return self._same_uzon_type(a_rep, b_rep)
+            return self._same_uzon_type(a_rep, b_rep, for_homogeneity=for_homogeneity)
         if isinstance(a, UzonEnum) and isinstance(b, UzonEnum):
             if a.type_name and b.type_name:
                 return a.type_name == b.type_name
