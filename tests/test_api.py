@@ -7,7 +7,8 @@ import tempfile
 import pytest
 
 import uzon
-from uzon.types import UzonInt, UzonFloat, UzonEnum
+from uzon import val
+from uzon.types import UzonInt, UzonFloat, UzonEnum, UzonStruct
 
 
 class TestLoads:
@@ -153,3 +154,106 @@ class TestErrors:
     def test_runtime_error(self):
         with pytest.raises(uzon.UzonRuntimeError):
             uzon.loads("x is undefined")
+
+
+class TestMerge:
+    def test_flat(self):
+        base = {"host": "localhost", "port": 8080}
+        override = {"port": 9090, "debug": True}
+        merged = uzon.merge(base, override)
+        assert merged == {"host": "localhost", "port": 9090, "debug": True}
+
+    def test_deep(self):
+        base = {"db": {"name": "mydb", "pool": 5}, "host": "localhost"}
+        override = {"db": {"pool": 10, "timeout": 30}}
+        merged = uzon.merge(base, override)
+        assert merged["host"] == "localhost"
+        assert merged["db"]["name"] == "mydb"
+        assert merged["db"]["pool"] == 10
+        assert merged["db"]["timeout"] == 30
+
+    def test_override_replaces_non_dict(self):
+        base = {"x": [1, 2, 3]}
+        override = {"x": [4, 5]}
+        merged = uzon.merge(base, override)
+        assert merged["x"] == [4, 5]
+
+    def test_preserves_type_name(self):
+        base = val.struct({"x": 0, "y": 0}, type_name="Point")
+        override = {"x": 5}
+        merged = uzon.merge(base, override)
+        assert isinstance(merged, UzonStruct)
+        assert merged.type_name == "Point"
+        assert merged["x"] == 5
+        assert merged["y"] == 0
+
+    def test_override_type_name_wins(self):
+        base = val.struct({"x": 0}, type_name="A")
+        override = val.struct({"x": 1}, type_name="B")
+        merged = uzon.merge(base, override)
+        assert merged.type_name == "B"
+
+    def test_empty_override(self):
+        base = {"a": 1, "b": 2}
+        merged = uzon.merge(base, {})
+        assert merged == base
+
+    def test_empty_base(self):
+        override = {"a": 1}
+        merged = uzon.merge({}, override)
+        assert merged == override
+
+    def test_with_uzon_loads(self):
+        base = uzon.loads('host is "localhost"\nport is 8080')
+        override = uzon.loads('port is 9090\ndebug is true')
+        merged = uzon.merge(base, override)
+        assert merged["host"] == "localhost"
+        assert merged["port"] == 9090
+        assert merged["debug"] is True
+
+
+class TestPrettyFormat:
+    def test_simple_struct(self):
+        data = {"x": 42, "name": "hello"}
+        out = uzon.pretty_format(data)
+        assert "x: 42" in out
+        assert "name: 'hello'" in out
+
+    def test_nested_struct(self):
+        data = {"server": {"host": "localhost", "port": 8080}}
+        out = uzon.pretty_format(data)
+        assert "server:" in out
+        assert "host: 'localhost'" in out
+        assert "port: 8080" in out
+
+    def test_typed_int(self):
+        data = {"port": val.u16(8080)}
+        out = uzon.pretty_format(data)
+        assert "8080 as u16" in out
+
+    def test_list_inline(self):
+        data = {"tags": ["a", "b", "c"]}
+        out = uzon.pretty_format(data)
+        assert "['a', 'b', 'c']" in out
+
+    def test_empty_struct(self):
+        data = {"s": {}}
+        out = uzon.pretty_format(data)
+        assert "{}" in out
+
+    def test_enum(self):
+        r = uzon.loads("x is red from red, green, blue called Color")
+        out = uzon.pretty_format(r)
+        assert "red as Color" in out
+
+    def test_bool_and_null(self):
+        data = {"a": True, "b": False, "c": None}
+        out = uzon.pretty_format(data)
+        assert "true" in out
+        assert "false" in out
+        assert "null" in out
+
+    def test_struct_type_name(self):
+        data = {"p": val.struct({"x": 1}, type_name="Point")}
+        out = uzon.pretty_format(data)
+        assert "as Point" in out
