@@ -15,6 +15,9 @@ UzonBuiltinFunction — §5.16: std library built-in function.
 from __future__ import annotations
 
 import copy as _copy
+import re as _re
+
+_INT_TYPE_RE = _re.compile(r'^([iu])(\d+)$')
 
 
 class _UzonUndefinedType:
@@ -122,6 +125,17 @@ class UzonFloat(float):
 # ── type-preserving arithmetic for UzonInt / UzonFloat ─────────
 
 
+def _int_range(type_name: str) -> tuple[int, int] | None:
+    """Return (lo, hi) bounds for an integer type, or None if unknown."""
+    m = _INT_TYPE_RE.match(type_name)
+    if not m:
+        return None
+    signed, width = m.group(1) == 'i', int(m.group(2))
+    if signed:
+        return -(1 << (width - 1)), (1 << (width - 1)) - 1
+    return 0, (1 << width) - 1
+
+
 def _make_int_op(name: str):
     """Generate an arithmetic method for UzonInt that preserves type_name."""
     base = getattr(int, name)
@@ -131,6 +145,14 @@ def _make_int_op(name: str):
         if result is NotImplemented:
             return result
         if isinstance(result, int) and not isinstance(result, bool):
+            bounds = _int_range(self.type_name)
+            if bounds is not None:
+                lo, hi = bounds
+                if not (lo <= result <= hi):
+                    raise OverflowError(
+                        f"Result {result} overflows {self.type_name} "
+                        f"range [{lo}, {hi}]"
+                    )
             return UzonInt(result, self.type_name)
         return result
 

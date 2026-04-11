@@ -88,6 +88,51 @@ class TestIntOverflow:
             val.u16(65536)
 
 
+# ── arithmetic overflow ──────────────────────────────────────────
+
+
+class TestArithmeticOverflow:
+    def test_i8_add_overflow(self):
+        with pytest.raises(OverflowError, match="overflows i8"):
+            val.i8(100) + 50
+
+    def test_i8_add_within_range(self):
+        r = val.i8(10) + 5
+        assert r == 15
+        assert r.type_name == "i8"
+
+    def test_u8_sub_underflow(self):
+        with pytest.raises(OverflowError, match="overflows u8"):
+            val.u8(3) - 10
+
+    def test_i32_mul_overflow(self):
+        with pytest.raises(OverflowError, match="overflows i32"):
+            val.i32(2_000_000_000) * 2
+
+    def test_i32_mul_within_range(self):
+        r = val.i32(1000) * 1000
+        assert r == 1_000_000
+        assert r.type_name == "i32"
+
+    def test_i8_negation_overflow(self):
+        with pytest.raises(OverflowError, match="overflows i8"):
+            -val.i8(-128)
+
+    def test_u16_pow_overflow(self):
+        with pytest.raises(OverflowError, match="overflows u16"):
+            val.u16(256) ** 2
+
+    def test_u16_pow_within_range(self):
+        r = val.u16(16) ** 2
+        assert r == 256
+        assert r.type_name == "u16"
+
+    def test_plain_int_with_typed_preserves_check(self):
+        """3 + val.i8(126) should overflow check against i8."""
+        with pytest.raises(OverflowError, match="overflows i8"):
+            val.i8(126) + 3
+
+
 # ── integer type errors ───────────────────────────────────────────
 
 
