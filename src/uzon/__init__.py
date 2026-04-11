@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .errors import UzonCircularError, UzonRuntimeError, UzonSyntaxError, UzonTypeError
+from .errors import UzonCircularError, UzonError, UzonRuntimeError, UzonSyntaxError, UzonTypeError
 from .evaluator import Evaluator
 from .generator import generate
 from .lexer import Lexer
@@ -33,6 +33,7 @@ __all__ = [
     "pretty_format",
     "val",
     # Errors
+    "UzonError",
     "UzonSyntaxError",
     "UzonTypeError",
     "UzonRuntimeError",
@@ -44,6 +45,9 @@ __all__ = [
     "UzonUnion",
     "UzonStruct",
     "UzonTaggedUnion",
+    "UzonTypedList",
+    "UzonFunction",
+    "UzonBuiltinFunction",
     "UzonUndefined",
 ]
 
