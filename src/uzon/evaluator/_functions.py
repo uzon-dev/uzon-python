@@ -85,7 +85,7 @@ class FunctionMixin:
             param_scope[pname] = val
 
         body_binding_scope = Scope(parent=func.closure_scope)
-        body_scope = Scope(parent=body_binding_scope, self_scope=body_binding_scope)
+        body_scope = Scope(parent=body_binding_scope, closure_scope=body_binding_scope)
         for pname, val in param_scope.items():
             body_scope.define(pname, val)
 
@@ -111,7 +111,7 @@ class FunctionMixin:
                 node.line, node.col, file=self._filename,
             )
         self._check_arg_count(func, args, node)
-        body_scope = Scope(parent=func.closure_scope, self_scope=func.closure_scope)
+        body_scope = Scope(parent=func.closure_scope, closure_scope=func.closure_scope)
         for i, (pname, ptype, pdefault) in enumerate(func.params):
             val = args[i] if i < len(args) else pdefault
             self._check_param_type(val, ptype, pname, node)
