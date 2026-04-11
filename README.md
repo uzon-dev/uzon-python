@@ -921,6 +921,28 @@ assert data["result"] == 42
 
 ---
 
+#### `UzonBuiltinFunction`
+
+```python
+class UzonBuiltinFunction
+```
+
+Built-in standard library function (e.g. `std.len`, `std.keys`). These are provided by the UZON evaluator and are not directly constructible from Python.
+
+**Attributes:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `name` | `str` | Function name (e.g. `"len"`, `"keys"`). |
+
+```python
+# UzonBuiltinFunction appears when a binding captures a std function
+data = uzon.loads('my_len is std.len')
+assert isinstance(data["my_len"], uzon.UzonBuiltinFunction)
+```
+
+---
+
 #### `UzonUndefined`
 
 ```python
@@ -947,6 +969,7 @@ All UZON errors inherit from `UzonError` and carry source location information.
 
 ```python
 from uzon import (
+    UzonError,          # base class — catch all UZON errors
     UzonSyntaxError, UzonTypeError,
     UzonRuntimeError, UzonCircularError,
 )
