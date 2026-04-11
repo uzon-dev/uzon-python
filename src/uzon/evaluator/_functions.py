@@ -11,10 +11,11 @@ from __future__ import annotations
 from typing import Any
 
 from ..ast_nodes import FunctionCall, FunctionExpr, Node
-from ..errors import UzonTypeError
+from ..errors import UzonRuntimeError, UzonTypeError
 from ..scope import Scope
 from ..types import (
     UzonBuiltinFunction, UzonEnum, UzonFloat, UzonFunction, UzonInt, UzonTaggedUnion,
+    UzonUndefined,
 )
 from ._constants import INT_TYPE_RE
 
@@ -59,6 +60,11 @@ class FunctionMixin:
                 )
             return callee.func(args, node)
 
+        if callee is UzonUndefined:
+            raise UzonRuntimeError(
+                "Cannot call undefined — not a function",
+                node.line, node.col, file=self._filename,
+            )
         if not isinstance(callee, UzonFunction):
             raise UzonTypeError(
                 f"Cannot call {self._type_name(callee)} — not a function",
