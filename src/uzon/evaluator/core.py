@@ -243,7 +243,7 @@ class Evaluator(
                 file=self._filename,
             )
 
-        # §5.12: Member access (self.x, env.X, struct.field)
+        # §5.12: Member access (env.X, struct.field)
         if isinstance(node, MemberAccess):
             return self._eval_member_access(node, scope, exclude)
 

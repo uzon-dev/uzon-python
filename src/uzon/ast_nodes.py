@@ -86,7 +86,7 @@ class EnvRef(Node):
 
 @dataclass
 class MemberAccess(Node):
-    """§5.5 precedence 1: dot-notation member access (self.x, list.0, etc.)."""
+    """§5.5 precedence 1: dot-notation member access (env.X, list.0, etc.)."""
     object: Node = field(default_factory=Node)
     member: str = ""       # field name or numeric index as string
 
