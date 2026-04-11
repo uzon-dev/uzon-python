@@ -48,6 +48,12 @@ class UzonInt(int):
 
     adoptable=True means untyped literal (defaults to i64) that can adopt
     another integer type when combined with a typed operand (§5 untyped literal compatibility).
+
+    Arithmetic operators preserve type_name::
+
+        >>> x = UzonInt(10, 'i32')
+        >>> x + 5
+        UzonInt(15, 'i32')
     """
 
     type_name: str
@@ -80,6 +86,12 @@ class UzonFloat(float):
 
     adoptable=True means untyped literal (defaults to f64) that can adopt
     another float type when combined with a typed operand.
+
+    Arithmetic operators preserve type_name::
+
+        >>> x = UzonFloat(1.5, 'f32')
+        >>> x * 2.0
+        UzonFloat(3.0, 'f32')
     """
 
     type_name: str
@@ -107,6 +119,67 @@ class UzonFloat(float):
         return float(self)
 
 
+# ── type-preserving arithmetic for UzonInt / UzonFloat ─────────
+
+
+def _make_int_op(name: str):
+    """Generate an arithmetic method for UzonInt that preserves type_name."""
+    base = getattr(int, name)
+
+    def method(self, *args):
+        result = base(self, *args)
+        if result is NotImplemented:
+            return result
+        if isinstance(result, int) and not isinstance(result, bool):
+            return UzonInt(result, self.type_name)
+        return result
+
+    method.__name__ = method.__qualname__ = name
+    return method
+
+
+def _make_float_op(name: str):
+    """Generate an arithmetic method for UzonFloat that preserves type_name."""
+    base = getattr(float, name)
+
+    def method(self, *args):
+        result = base(self, *args)
+        if result is NotImplemented:
+            return result
+        if isinstance(result, float):
+            return UzonFloat(result, self.type_name)
+        return result
+
+    method.__name__ = method.__qualname__ = name
+    return method
+
+
+for _op in (
+    "__add__", "__radd__", "__sub__", "__rsub__",
+    "__mul__", "__rmul__", "__floordiv__", "__rfloordiv__",
+    "__mod__", "__rmod__", "__pow__", "__rpow__",
+    "__and__", "__rand__", "__or__", "__ror__",
+    "__xor__", "__rxor__", "__lshift__", "__rlshift__",
+    "__rshift__", "__rrshift__",
+    "__neg__", "__pos__", "__abs__", "__invert__",
+    "__round__",
+):
+    setattr(UzonInt, _op, _make_int_op(_op))
+
+for _op in (
+    "__add__", "__radd__", "__sub__", "__rsub__",
+    "__mul__", "__rmul__", "__truediv__", "__rtruediv__",
+    "__floordiv__", "__rfloordiv__", "__mod__", "__rmod__",
+    "__pow__", "__rpow__",
+    "__neg__", "__pos__", "__abs__",
+    "__round__",
+):
+    setattr(UzonFloat, _op, _make_float_op(_op))
+
+
+# ── collection types ───────────────────────────────────────────
+
+
 class UzonTypedList(list):
     """List that preserves element type annotation for round-trip fidelity.
 
@@ -130,10 +203,14 @@ class UzonTypedList(list):
         return UzonTypedList([_copy.deepcopy(e, memo) for e in self], self.element_type)
 
 
+# ── variant types ──────────────────────────────────────────────
+
+
 class UzonEnum:
     """§3.5: Enum value — one variant from a defined set."""
 
     __slots__ = ("value", "variants", "type_name")
+    __match_args__ = ("value",)
 
     def __init__(self, value: str, variants: list[str], type_name: str | None = None):
         self.value = value
@@ -171,9 +248,11 @@ class UzonUnion:
     """§3.6: Untagged union — value with one of several possible types.
 
     §3.6: Equality compares inner values only — no tag to compare.
+    Transparent access: ``[]``, ``len()``, ``iter()``, ``in`` delegate to inner value.
     """
 
     __slots__ = ("value", "types", "type_name")
+    __match_args__ = ("value",)
 
     def __init__(self, value: object, types: list[str], type_name: str | None = None):
         self.value = value
@@ -198,6 +277,18 @@ class UzonUnion:
     def __bool__(self) -> bool:
         return bool(self.value)
 
+    def __getitem__(self, key):
+        return self.value[key]
+
+    def __len__(self) -> int:
+        return len(self.value)
+
+    def __iter__(self):
+        return iter(self.value)
+
+    def __contains__(self, item) -> bool:
+        return item in self.value
+
     def __copy__(self) -> UzonUnion:
         return UzonUnion(self.value, self.types, self.type_name)
 
@@ -216,9 +307,11 @@ class UzonTaggedUnion:
     """§3.7: Tagged union — value paired with explicit variant tag.
 
     §3.7.2: Equality compares tag AND inner value, not type_name.
+    Transparent access: ``[]``, ``len()``, ``iter()``, ``in`` delegate to inner value.
     """
 
     __slots__ = ("value", "tag", "variants", "type_name")
+    __match_args__ = ("tag", "value")
 
     def __init__(
         self,
@@ -247,6 +340,18 @@ class UzonTaggedUnion:
     def __str__(self) -> str:
         return str(self.value)
 
+    def __getitem__(self, key):
+        return self.value[key]
+
+    def __len__(self) -> int:
+        return len(self.value)
+
+    def __iter__(self):
+        return iter(self.value)
+
+    def __contains__(self, item) -> bool:
+        return item in self.value
+
     def __copy__(self) -> UzonTaggedUnion:
         return UzonTaggedUnion(self.value, self.tag, self.variants, self.type_name)
 
@@ -260,6 +365,9 @@ class UzonTaggedUnion:
 
     def to_plain(self) -> object:
         return self.value
+
+
+# ── function types ─────────────────────────────────────────────
 
 
 class UzonFunction:
