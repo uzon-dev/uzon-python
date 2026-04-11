@@ -79,7 +79,7 @@ class Evaluator(
         for b in bindings:
             if b.name in seen:
                 is_of = isinstance(b, Binding) and isinstance(b.value, FieldExtraction)
-                if not is_of and not self._references_self(b, b.name):
+                if not is_of and not self._references_own_name(b, b.name):
                     raise UzonSyntaxError(
                         f"Duplicate binding '{b.name}' in same scope",
                         b.line, b.col, file=self._filename,

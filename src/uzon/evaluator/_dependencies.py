@@ -22,7 +22,7 @@ class DependencyMixin:
     """Dependency graph and topological sort methods mixed into the Evaluator."""
 
     @staticmethod
-    def _references_self(b: Binding | AreBinding, name: str) -> bool:
+    def _references_own_name(b: Binding | AreBinding, name: str) -> bool:
         """Check if a binding's value AST references <name> as a bare identifier."""
         nodes: list[Any] = []
         if isinstance(b, Binding):

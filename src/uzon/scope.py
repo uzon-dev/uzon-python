@@ -20,11 +20,11 @@ from .types import UzonUndefined
 class Scope:
     """A scope in the UZON evaluation environment."""
 
-    def __init__(self, parent: Scope | None = None, *, self_scope: Scope | None = None):
+    def __init__(self, parent: Scope | None = None, *, closure_scope: Scope | None = None):
         self._bindings: dict[str, Any] = {}
         self._parent = parent
         self._types: dict[str, Any] = {}
-        self._self_scope = self_scope
+        self._closure_scope = closure_scope
 
     def define(self, name: str, value: Any) -> None:
         self._bindings[name] = value
@@ -70,13 +70,13 @@ class Scope:
         return self._parent
 
     @property
-    def self_scope(self) -> Scope:
+    def closure_scope(self) -> Scope:
         """The scope for closure resolution.
 
         For function body scopes (§3.8), this is the closure scope (skipping params).
         For normal scopes, this is the scope itself.
         """
-        return self._self_scope if self._self_scope is not None else self
+        return self._closure_scope if self._closure_scope is not None else self
 
     @property
     def names(self) -> set[str]:
