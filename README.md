@@ -979,9 +979,9 @@ data = uzon.loads('x is missing_name or else 42')
 # missing_name evaluates to undefined, or else provides fallback
 assert data["x"] == 42
 
-# Undefined appears in results when not resolved
+# Undefined bindings are excluded from results
 data = uzon.loads('x is missing_name, y is x or else "fallback"')
-assert data["x"] is uzon.UzonUndefined
+assert "x" not in data  # undefined bindings are omitted
 assert data["y"] == "fallback"
 ```
 
