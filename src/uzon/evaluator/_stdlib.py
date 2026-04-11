@@ -289,6 +289,10 @@ class StdlibMixin:
                 f"std.split delimiter must be a string, got {self._type_name(delimiter)}",
                 node.line, node.col, file=self._filename,
             )
+        if s == "":
+            return [""]
+        if delimiter == "":
+            return list(s)
         return s.split(delimiter)
 
     def _std_trim(self, args: list, node: Node) -> str:
