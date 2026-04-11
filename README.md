@@ -152,10 +152,10 @@ def loads(text: str, *, plain: bool = False) -> dict[str, Any]
 
 **Parameters:**
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `text` | `str` | *(required)* | UZON source text. |
-| `plain` | `bool` | `False` | If `True`, recursively strip all type wrappers to plain Python equivalents. |
+| Name    | Type   | Default      | Description                                                                 |
+|---------|--------|--------------|-----------------------------------------------------------------------------|
+| `text`  | `str`  | *(required)* | UZON source text.                                                           |
+| `plain` | `bool` | `False`      | If `True`, recursively strip all type wrappers to plain Python equivalents. |
 
 **Returns:** `dict[str, Any]` — A dict of evaluated bindings. Keys are binding names, values are evaluated UZON values.
 
@@ -199,10 +199,10 @@ def dumps(value: dict[str, Any], *, indent: int = 4) -> str
 
 **Parameters:**
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `value` | `dict[str, Any]` | *(required)* | A dict representing a UZON document. |
-| `indent` | `int` | `4` | Number of spaces per indentation level. |
+| Name     | Type             | Default      | Description                             |
+|----------|------------------|--------------|-----------------------------------------|
+| `value`  | `dict[str, Any]` | *(required)* | A dict representing a UZON document.    |
+| `indent` | `int`            | `4`          | Number of spaces per indentation level. |
 
 **Returns:** `str` ��� UZON source text.
 
@@ -232,10 +232,10 @@ def load(source: str | Path, *, plain: bool = False) -> dict[str, Any]
 
 **Parameters:**
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `source` | `str \| Path` | *(required)* | Path to a `.uzon` file. |
-| `plain` | `bool` | `False` | If `True`, strip all type wrappers. |
+| Name     | Type          | Default      | Description                         |
+|----------|---------------|--------------|-------------------------------------|
+| `source` | `str \| Path` | *(required)* | Path to a `.uzon` file.             |
+| `plain`  | `bool`        | `False`      | If `True`, strip all type wrappers. |
 
 **Returns:** `dict[str, Any]` — A dict of evaluated bindings.
 
@@ -265,11 +265,11 @@ def dump(value: dict[str, Any], dest: str | Path, *, indent: int = 4) -> None
 
 **Parameters:**
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `value` | `dict[str, Any]` | *(required)* | A dict representing a UZON document. |
-| `dest` | `str \| Path` | *(required)* | Path to write to. |
-| `indent` | `int` | `4` | Number of spaces per indentation level. |
+| Name     | Type             | Default      | Description                             |
+|----------|------------------|--------------|-----------------------------------------|
+| `value`  | `dict[str, Any]` | *(required)* | A dict representing a UZON document.    |
+| `dest`   | `str \| Path`    | *(required)* | Path to write to.                       |
+| `indent` | `int`            | `4`          | Number of spaces per indentation level. |
 
 **Returns:** `None`
 
@@ -294,9 +294,9 @@ Nested dicts are merged recursively. All other values in `override` replace `bas
 
 **Parameters:**
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `base` | `dict[str, Any]` | *(required)* | The base struct. |
+| Name       | Type             | Default      | Description                                       |
+|------------|------------------|--------------|---------------------------------------------------|
+| `base`     | `dict[str, Any]` | *(required)* | The base struct.                                  |
 | `override` | `dict[str, Any]` | *(required)* | The override struct. Values here take precedence. |
 
 **Returns:** `dict[str, Any]` — A new merged dict. Inputs are not mutated.
@@ -338,10 +338,10 @@ def pretty_format(value: Any, *, indent: int = 2) -> str
 
 **Parameters:**
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `value` | `Any` | *(required)* | Any UZON value (dict, list, typed value, etc.). |
-| `indent` | `int` | `2` | Number of spaces per indentation level. |
+| Name     | Type  | Default      | Description                                     |
+|----------|-------|--------------|-------------------------------------------------|
+| `value`  | `Any` | *(required)* | Any UZON value (dict, list, typed value, etc.). |
+| `indent` | `int` | `2`          | Number of spaces per indentation level.         |
 
 **Returns:** `str` — Multi-line human-readable representation.
 
@@ -376,23 +376,23 @@ def json_default(obj: Any) -> Any
 
 **Parameters:**
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
+| Name  | Type  | Default      | Description                                                |
+|-------|-------|--------------|------------------------------------------------------------|
 | `obj` | `Any` | *(required)* | The object that `json.dumps` could not serialize natively. |
 
 **Returns:** A JSON-serializable Python value.
 
 **Type mapping:**
 
-| UZON Type | JSON Output |
-|-----------|-------------|
-| `UzonInt` / `UzonFloat` | number (handled natively by `json`) |
-| `UzonEnum` | string (variant name) |
-| `UzonUnion` | inner value (recursive) |
-| `UzonTaggedUnion` | `{"_tag": str, "_value": ...}` |
-| `UzonStruct` | object (handled natively — it's a `dict`) |
-| `UzonUndefined` | `null` |
-| `UzonFunction` | raises `TypeError` |
+| UZON Type               | JSON Output                               |
+|-------------------------|-------------------------------------------|
+| `UzonInt` / `UzonFloat` | number (handled natively by `json`)       |
+| `UzonEnum`              | string (variant name)                     |
+| `UzonUnion`             | inner value (recursive)                   |
+| `UzonTaggedUnion`       | `{"_tag": str, "_value": ...}`            |
+| `UzonStruct`            | object (handled natively — it's a `dict`) |
+| `UzonUndefined`         | `null`                                    |
+| `UzonFunction`          | raises `TypeError`                        |
 
 **Raises:**
 - `TypeError` — If the object is a `UzonFunction` or otherwise not serializable.
@@ -486,10 +486,10 @@ def struct(fields: dict[str, Any], *, type_name: str | None = None) -> UzonStruc
 
 **Parameters:**
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `fields` | `dict[str, Any]` | *(required)* | Dict of field names to values. |
-| `type_name` | `str \| None` | `None` | Optional named type (e.g. `"Server"`). |
+| Name        | Type             | Default      | Description                            |
+|-------------|------------------|--------------|----------------------------------------|
+| `fields`    | `dict[str, Any]` | *(required)* | Dict of field names to values.         |
+| `type_name` | `str \| None`    | `None`       | Optional named type (e.g. `"Server"`). |
 
 **Returns:** `UzonStruct` — A dict subclass with `type_name` metadata.
 
@@ -519,11 +519,11 @@ def enum(
 
 **Parameters:**
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `value` | `str` | *(required)* | The active variant name. |
-| `variants` | `list[str]` | *(required)* | All allowed variant names. |
-| `type_name` | `str \| None` | `None` | Optional named type (e.g. `"Color"`). |
+| Name        | Type          | Default      | Description                           |
+|-------------|---------------|--------------|---------------------------------------|
+| `value`     | `str`         | *(required)* | The active variant name.              |
+| `variants`  | `list[str]`   | *(required)* | All allowed variant names.            |
+| `type_name` | `str \| None` | `None`       | Optional named type (e.g. `"Color"`). |
 
 **Raises:**
 - `ValueError` — If `value` is not in `variants`.
@@ -551,11 +551,11 @@ def union(
 
 **Parameters:**
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `value` | `Any` | *(required)* | The inner value. |
-| `types` | `list[str]` | *(required)* | List of allowed type names. |
-| `type_name` | `str \| None` | `None` | Optional named type. |
+| Name        | Type          | Default      | Description                 |
+|-------------|---------------|--------------|-----------------------------|
+| `value`     | `Any`         | *(required)* | The inner value.            |
+| `types`     | `list[str]`   | *(required)* | List of allowed type names. |
+| `type_name` | `str \| None` | `None`       | Optional named type.        |
 
 **Examples:**
 
@@ -581,12 +581,12 @@ def tagged(
 
 **Parameters:**
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `tag` | `str` | *(required)* | The active variant tag. |
-| `value` | `Any` | *(required)* | The inner value. |
-| `variants` | `dict[str, str \| None]` | *(required)* | Map of variant names to their payload types (`None` for no payload). |
-| `type_name` | `str \| None` | `None` | Optional named type (e.g. `"Result"`). |
+| Name        | Type                     | Default      | Description                                                          |
+|-------------|--------------------------|--------------|----------------------------------------------------------------------|
+| `tag`       | `str`                    | *(required)* | The active variant tag.                                              |
+| `value`     | `Any`                    | *(required)* | The inner value.                                                     |
+| `variants`  | `dict[str, str \| None]` | *(required)* | Map of variant names to their payload types (`None` for no payload). |
+| `type_name` | `str \| None`            | `None`       | Optional named type (e.g. `"Result"`).                               |
 
 **Raises:**
 - `ValueError` — If `tag` is not in `variants`.
@@ -633,9 +633,9 @@ UzonInt(value: int, type_name: str, *, adoptable: bool = False)
 
 **Attributes:**
 
-| Name | Type | Description |
-|------|------|-------------|
-| `type_name` | `str` | Width annotation (e.g. `"i32"`, `"u16"`). |
+| Name        | Type   | Description                                                               |
+|-------------|--------|---------------------------------------------------------------------------|
+| `type_name` | `str`  | Width annotation (e.g. `"i32"`, `"u16"`).                                 |
 | `adoptable` | `bool` | `True` if this is an untyped literal that can adopt another integer type. |
 
 **Methods:**
@@ -676,9 +676,9 @@ UzonFloat(value: float, type_name: str, *, adoptable: bool = False)
 
 **Attributes:**
 
-| Name | Type | Description |
-|------|------|-------------|
-| `type_name` | `str` | Width annotation (e.g. `"f32"`, `"f64"`). |
+| Name        | Type   | Description                                                             |
+|-------------|--------|-------------------------------------------------------------------------|
+| `type_name` | `str`  | Width annotation (e.g. `"f32"`, `"f64"`).                               |
 | `adoptable` | `bool` | `True` if this is an untyped literal that can adopt another float type. |
 
 **Methods:**
@@ -715,10 +715,10 @@ UzonEnum(value: str, variants: list[str], type_name: str | None = None)
 
 **Attributes:**
 
-| Name | Type | Description |
-|------|------|-------------|
-| `value` | `str` | The active variant name. |
-| `variants` | `list[str]` | All allowed variant names. |
+| Name        | Type          | Description                            |
+|-------------|---------------|----------------------------------------|
+| `value`     | `str`         | The active variant name.               |
+| `variants`  | `list[str]`   | All allowed variant names.             |
 | `type_name` | `str \| None` | Named type, if declared with `called`. |
 
 **Methods:**
@@ -763,10 +763,10 @@ UzonUnion(value: Any, types: list[str], type_name: str | None = None)
 
 **Attributes:**
 
-| Name | Type | Description |
-|------|------|-------------|
-| `value` | `Any` | The inner value. |
-| `types` | `list[str]` | Allowed type names. |
+| Name        | Type          | Description                            |
+|-------------|---------------|----------------------------------------|
+| `value`     | `Any`         | The inner value.                       |
+| `types`     | `list[str]`   | Allowed type names.                    |
 | `type_name` | `str \| None` | Named type, if declared with `called`. |
 
 **Methods:**
@@ -807,12 +807,12 @@ UzonTaggedUnion(value: Any, tag: str, variants: dict[str, str | None], type_name
 
 **Attributes:**
 
-| Name | Type | Description |
-|------|------|-------------|
-| `value` | `Any` | The inner value (payload). |
-| `tag` | `str` | The active variant tag. |
-| `variants` | `dict[str, str \| None]` | Map of variant names to payload types. |
-| `type_name` | `str \| None` | Named type, if declared with `called`. |
+| Name        | Type                     | Description                            |
+|-------------|--------------------------|----------------------------------------|
+| `value`     | `Any`                    | The inner value (payload).             |
+| `tag`       | `str`                    | The active variant tag.                |
+| `variants`  | `dict[str, str \| None]` | Map of variant names to payload types. |
+| `type_name` | `str \| None`            | Named type, if declared with `called`. |
 
 **Methods:**
 - `to_plain() -> Any` — Return the inner value.
@@ -856,8 +856,8 @@ UzonStruct(mapping: dict | None = None, type_name: str | None = None)
 
 **Attributes:**
 
-| Name | Type | Description |
-|------|------|-------------|
+| Name        | Type          | Description                                      |
+|-------------|---------------|--------------------------------------------------|
 | `type_name` | `str \| None` | The named type, or `None` for anonymous structs. |
 
 All standard `dict` operations work — `[]`, `.get()`, `.keys()`, `.values()`, `.items()`, `in`, `len()`, iteration, etc.
@@ -893,8 +893,8 @@ UzonTypedList(elements: list, element_type: str | None = None)
 
 **Attributes:**
 
-| Name | Type | Description |
-|------|------|-------------|
+| Name           | Type          | Description                                         |
+|----------------|---------------|-----------------------------------------------------|
 | `element_type` | `str \| None` | Element type annotation (e.g. `"i32"`, `"Server"`). |
 
 All standard `list` operations work. Subclass of `list`.
@@ -919,11 +919,11 @@ Function value — a closure capturing its definition scope. Produced when parsi
 
 **Attributes:**
 
-| Name | Type | Description |
-|------|------|-------------|
-| `params` | `list[tuple[str, str, Any]]` | Parameter list: `[(name, type_name, default_or_None), ...]`. |
-| `return_type` | `str` | Return type name. |
-| `type_name` | `str \| None` | Named type, if declared with `called`. |
+| Name          | Type                         | Description                                                  |
+|---------------|------------------------------|--------------------------------------------------------------|
+| `params`      | `list[tuple[str, str, Any]]` | Parameter list: `[(name, type_name, default_or_None), ...]`. |
+| `return_type` | `str`                        | Return type name.                                            |
+| `type_name`   | `str \| None`                | Named type, if declared with `called`.                       |
 
 **Methods:**
 - `signature() -> tuple[tuple[str, ...], str]` — Return `(param_types, return_type)` for structural comparison.
@@ -950,8 +950,8 @@ Built-in standard library function (e.g. `std.len`, `std.keys`). These are provi
 
 **Attributes:**
 
-| Name | Type | Description |
-|------|------|-------------|
+| Name   | Type  | Description                             |
+|--------|-------|-----------------------------------------|
 | `name` | `str` | Function name (e.g. `"len"`, `"keys"`). |
 
 ```python
@@ -1009,10 +1009,10 @@ Base class for all UZON errors.
 
 **Attributes:**
 
-| Name | Type | Description |
-|------|------|-------------|
-| `line` | `int \| None` | Source line number (1-based). |
-| `col` | `int \| None` | Source column number (1-based). |
+| Name   | Type          | Description                                   |
+|--------|---------------|-----------------------------------------------|
+| `line` | `int \| None` | Source line number (1-based).                 |
+| `col`  | `int \| None` | Source column number (1-based).               |
 | `file` | `str \| None` | Source file path, or `None` for string input. |
 
 Error messages automatically include location info: `"File config.uzon, Line 5, col 12: ..."`.
@@ -1092,17 +1092,17 @@ except uzon.UzonCircularError as e:
 
 When `plain=True` is passed to `loads()` or `load()`, all type wrappers are recursively stripped:
 
-| UZON Type | Plain Python Type |
-|-----------|-------------------|
-| `UzonInt` | `int` |
-| `UzonFloat` | `float` |
-| `UzonEnum` | `str` (variant name) |
-| `UzonUnion` | inner value (unwrapped) |
-| `UzonTaggedUnion` | inner value (unwrapped) |
-| `UzonStruct` | `dict` |
-| `bool`, `str`, `None` | unchanged |
-| `list` | `list` (elements recursively stripped) |
-| `tuple` | `tuple` (elements recursively stripped) |
+| UZON Type             | Plain Python Type                       |
+|-----------------------|-----------------------------------------|
+| `UzonInt`             | `int`                                   |
+| `UzonFloat`           | `float`                                 |
+| `UzonEnum`            | `str` (variant name)                    |
+| `UzonUnion`           | inner value (unwrapped)                 |
+| `UzonTaggedUnion`     | inner value (unwrapped)                 |
+| `UzonStruct`          | `dict`                                  |
+| `bool`, `str`, `None` | unchanged                               |
+| `list`                | `list` (elements recursively stripped)  |
+| `tuple`               | `tuple` (elements recursively stripped) |
 
 ```python
 data = uzon.loads('''
