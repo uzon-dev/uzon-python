@@ -87,6 +87,23 @@ class UzonFloat(float):
         return float(self)
 
 
+class UzonTypedList(list):
+    """List that preserves element type annotation for round-trip fidelity.
+
+    Used when a list has an explicit `as [Type]` annotation (§6.1), so the
+    generator can re-emit the annotation even for empty or all-null lists.
+    """
+
+    element_type: str | None
+
+    def __init__(self, elements: list, element_type: str | None = None):
+        super().__init__(elements)
+        self.element_type = element_type
+
+    def __repr__(self) -> str:
+        return f"UzonTypedList({list.__repr__(self)}, element_type={self.element_type!r})"
+
+
 class UzonEnum:
     """§3.5: Enum value — one variant from a defined set."""
 

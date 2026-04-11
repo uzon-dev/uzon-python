@@ -17,7 +17,7 @@ from ..errors import UzonSyntaxError, UzonTypeError
 from ..scope import Scope
 from ..types import (
     UzonEnum, UzonFloat, UzonFunction, UzonInt,
-    UzonTaggedUnion, UzonUndefined, UzonUnion,
+    UzonTaggedUnion, UzonTypedList, UzonUndefined, UzonUnion,
 )
 from ._constants import FLOAT_TYPES, INT_TYPE_RE
 
@@ -121,8 +121,9 @@ class TypeAnnotationMixin:
             return value
         if type_expr.is_list:
             if isinstance(value, list) and type_expr.inner:
-                return [self._wrap_typed(e, type_expr.inner) if e is not None else None
-                        for e in value]
+                wrapped = [self._wrap_typed(e, type_expr.inner) if e is not None else None
+                           for e in value]
+                return UzonTypedList(wrapped, type_expr.inner.name)
             return value
         name = type_expr.name
         if INT_TYPE_RE.match(name) and isinstance(value, int) and not isinstance(value, bool):

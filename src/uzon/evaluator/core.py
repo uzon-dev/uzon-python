@@ -68,7 +68,8 @@ class Evaluator(
     # ── binding evaluation ─────────────────────────────────────────────
 
     def _evaluate_bindings(
-        self, bindings: list[Binding | AreBinding], scope: Scope
+        self, bindings: list[Binding | AreBinding], scope: Scope,
+        *, struct_context: bool = False,
     ) -> None:
         """Evaluate bindings with dependency resolution and duplicate detection."""
         # §3.1: detect duplicates; self-referencing overrides are allowed
@@ -106,14 +107,17 @@ class Evaluator(
         order = self._topological_sort(bindings, deps)
 
         for b in order:
-            value = self._eval_binding(b, scope)
+            value = self._eval_binding(b, scope, struct_context=struct_context)
             scope.define(b.name, value)
 
         for b in override_bindings:
-            value = self._eval_binding(b, scope)
+            value = self._eval_binding(b, scope, struct_context=struct_context)
             scope.define(b.name, value)
 
-    def _eval_binding(self, b: Binding | AreBinding, scope: Scope) -> Any:
+    def _eval_binding(
+        self, b: Binding | AreBinding, scope: Scope,
+        struct_context: bool = False,
+    ) -> Any:
         """Evaluate a single binding."""
         if isinstance(b, AreBinding):
             return self._eval_are_binding(b, scope)
@@ -126,16 +130,16 @@ class Evaluator(
 
         value = self._eval_node(b.value, scope, exclude=b.name)
 
-        # §6.1: Empty list requires type annotation
-        if isinstance(value, list) and len(value) == 0:
+        # §6.1: Empty list requires type annotation (relaxed inside struct literals)
+        if not struct_context and isinstance(value, list) and len(value) == 0:
             if not isinstance(b.value, (TypeAnnotation, IfExpr, CaseExpr, OrElse, FunctionCall, BinaryOp)):
                 raise UzonTypeError(
                     "Empty list requires explicit type annotation: [] as [Type]",
                     b.value.line, b.value.col, file=self._filename,
                 )
 
-        # All-null list requires type annotation
-        if (isinstance(value, list) and value
+        # All-null list requires type annotation (relaxed inside struct literals)
+        if (not struct_context and isinstance(value, list) and value
                 and not isinstance(b.value, TypeAnnotation)
                 and all(e is None for e in value)):
             raise UzonTypeError(

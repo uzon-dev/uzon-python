@@ -12,7 +12,7 @@ from .evaluator import Evaluator
 from .generator import generate
 from .lexer import Lexer
 from .parser import Parser
-from .types import UzonEnum, UzonFloat, UzonInt, UzonTaggedUnion, UzonUndefined, UzonUnion
+from .types import UzonEnum, UzonFloat, UzonInt, UzonTaggedUnion, UzonTypedList, UzonUndefined, UzonUnion
 
 __version__ = "0.5.0"
 
