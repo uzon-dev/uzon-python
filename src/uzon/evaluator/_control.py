@@ -18,6 +18,7 @@ from ..ast_nodes import (
 )
 from ..errors import UzonRuntimeError, UzonTypeError
 from .._format import format_float as _format_float
+from ..scope import Scope
 from ..types import (
     UzonBuiltinFunction, UzonEnum, UzonFloat, UzonFunction,
     UzonInt, UzonTaggedUnion, UzonUndefined, UzonUnion,
@@ -104,6 +105,18 @@ class ControlMixin:
         except UzonRuntimeError:
             return SPECULATIVE_FAILED
 
+    def _speculative_eval_narrowed(self, node: Node, scope, exclude: str | None) -> Any:
+        """§5.10: Speculatively evaluate a case-type branch with narrowing.
+
+        Suppresses both runtime and type errors because the narrowed scope
+        contains the actual inner value, which may not match the branch's
+        expected type for non-selected branches.
+        """
+        try:
+            return self._eval_node(node, scope, exclude)
+        except (UzonRuntimeError, UzonTypeError):
+            return SPECULATIVE_FAILED
+
     def _check_branch_type_compat(self, values: list[Any], node: Node) -> None:
         """Check that all branch results are type-compatible (null exempt)."""
         non_null = [v for v in values if v is not None and v is not UzonUndefined]
@@ -168,8 +181,14 @@ class ControlMixin:
         elif case_kind == "type":
             pass  # §5.10: case type works on any value
 
+        # §5.10 branch narrowing: identify scrutinee name for case type
+        scrutinee_name: str | None = None
+        if case_kind == "type" and isinstance(node.scrutinee, Identifier):
+            scrutinee_name = node.scrutinee.name
+
         result = None
         matched_idx: int | None = None
+        narrowed_scopes: list[Any] = []  # per-clause narrowed scopes for speculative eval
 
         for i, clause in enumerate(node.when_clauses):
             # Validation runs for all clauses (even after a match)
@@ -206,6 +225,14 @@ class ControlMixin:
                         file=self._filename,
                     )
 
+            # §5.10: Build narrowed scope for this branch
+            branch_scope = scope
+            if scrutinee_name is not None:
+                narrowed = scrutinee.value if isinstance(scrutinee, (UzonUnion, UzonTaggedUnion)) else scrutinee
+                branch_scope = Scope(parent=scope)
+                branch_scope.define(scrutinee_name, narrowed)
+            narrowed_scopes.append(branch_scope)
+
             if matched_idx is not None:
                 continue
 
@@ -215,9 +242,9 @@ class ControlMixin:
                     matched_idx = i
             elif case_kind == "type":
                 type_name = clause.value.name
-                check_val = scrutinee.value if isinstance(scrutinee, UzonUnion) else scrutinee
+                check_val = scrutinee.value if isinstance(scrutinee, (UzonUnion, UzonTaggedUnion)) else scrutinee
                 if self._value_matches_type(check_val, type_name):
-                    result = self._eval_node(clause.result, scope, exclude)
+                    result = self._eval_node(clause.result, branch_scope, exclude)
                     matched_idx = i
             else:
                 when_val = self._resolve_when_value(clause.value, scrutinee, scope, exclude)
@@ -228,11 +255,18 @@ class ControlMixin:
         if matched_idx is None:
             result = self._eval_node(node.else_branch, scope, exclude)
 
-        # §D.5: speculatively evaluate all non-selected branches for type checking
+        # §D.5: speculatively evaluate all non-selected branches for type checking.
+        # §5.10: For case type, non-selected branches are type-checked against
+        # their narrowed type — suppress type errors since the narrowed value
+        # cannot be fully simulated for a non-matching branch.
         branch_values = [result]
         for i, clause in enumerate(node.when_clauses):
             if i != matched_idx:
-                spec = self._speculative_eval(clause.result, scope, exclude)
+                ns = narrowed_scopes[i] if i < len(narrowed_scopes) else scope
+                if case_kind == "type":
+                    spec = self._speculative_eval_narrowed(clause.result, ns, exclude)
+                else:
+                    spec = self._speculative_eval(clause.result, ns, exclude)
                 if spec is not SPECULATIVE_FAILED:
                     branch_values.append(spec)
         if matched_idx is not None:
