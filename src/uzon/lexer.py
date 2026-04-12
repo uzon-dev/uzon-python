@@ -118,6 +118,25 @@ class Lexer:
             else:
                 break
 
+    def _skip_ws_and_newlines(self) -> None:
+        """Skip whitespace, comments, and newlines.
+
+        Used by composite keyword lookahead (§9): ``or else``, ``is not``,
+        etc. must be recognized even when split across lines.
+        """
+        while self._pos < len(self._src):
+            ch = self._src[self._pos]
+            if ch in (" ", "\t"):
+                self._advance()
+            elif ch == "\n":
+                self._advance()
+            elif ch == "\r":
+                self._advance()
+            elif ch == "/" and self._peek_at(1) == "/":
+                self._skip_comment()
+            else:
+                break
+
     def _skip_comment(self) -> None:
         """§2.2: Line comment — // to end of line."""
         self._advance()  # /
@@ -597,12 +616,12 @@ class Lexer:
         """§9: Handle ``is``, ``is not``, ``is named``, ``is not named``, ``is type``, ``is not type``."""
         sp, sl, sc = self._pos, self._line, self._col
 
-        self._skip_ws()
+        self._skip_ws_and_newlines()
         nxt = self._peek_word()
 
         if nxt == "not":
             self._consume_word(nxt)
-            self._skip_ws()
+            self._skip_ws_and_newlines()
             nxt2 = self._peek_word()
             if nxt2 == "named":
                 self._consume_word(nxt2)
@@ -632,7 +651,7 @@ class Lexer:
         """§9: Handle ``or`` and ``or else``."""
         sp, sl, sc = self._pos, self._line, self._col
 
-        self._skip_ws()
+        self._skip_ws_and_newlines()
         nxt = self._peek_word()
 
         if nxt == "else":

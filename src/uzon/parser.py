@@ -867,14 +867,26 @@ class Parser:
 
         if tok.type == TokenType.LPAREN:
             self._advance()
-            elems = [self._parse_type_expr()]
-            self._expect(TokenType.COMMA)
-            elems.append(self._parse_type_expr())
-            while self._peek_type() == TokenType.COMMA:
+            # §9: () = empty tuple
+            if self._peek_type() == TokenType.RPAREN:
                 self._advance()
-                if self._peek_type() == TokenType.RPAREN:
-                    break
+                return TypeExpr(name="()", is_tuple=True, elements=[],
+                                line=tok.line, col=tok.col)
+            first = self._parse_type_expr()
+            if self._peek_type() == TokenType.RPAREN:
+                # §9: (T) = grouping — returns inner type unwrapped
+                self._advance()
+                return first
+            # §9: (T,) = 1-tuple or (T, T, ...) = n-tuple
+            self._expect(TokenType.COMMA)
+            elems = [first]
+            if self._peek_type() != TokenType.RPAREN:
                 elems.append(self._parse_type_expr())
+                while self._peek_type() == TokenType.COMMA:
+                    self._advance()
+                    if self._peek_type() == TokenType.RPAREN:
+                        break
+                    elems.append(self._parse_type_expr())
             self._expect(TokenType.RPAREN)
             name = "(" + ", ".join(e.name for e in elems) + ")"
             return TypeExpr(name=name, is_tuple=True, elements=elems,

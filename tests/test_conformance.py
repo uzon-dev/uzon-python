@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 
 import uzon
+from uzon.lexer import Lexer
+from uzon.parser import Parser
 from uzon.types import UzonEnum, UzonFloat, UzonInt, UzonTaggedUnion, UzonUnion
 
 CONFORMANCE_DIR = Path(__file__).resolve().parent.parent.parent / "conformance"
@@ -91,7 +93,9 @@ def _collect_parse_valid():
 def test_parse_valid(name: str):
     _skip_if_missing()
     src_file = CONFORMANCE_DIR / "parse" / "valid" / f"{name}.uzon"
-    uzon.load(src_file)
+    text = src_file.read_text(encoding="utf-8")
+    tokens = Lexer(text, filename=str(src_file)).tokenize()
+    Parser(tokens, filename=str(src_file)).parse()
 
 
 # ── parse/invalid tests ──────────────────────────────────────────

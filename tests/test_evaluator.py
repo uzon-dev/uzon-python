@@ -705,9 +705,9 @@ class TestStdLibrary:
 # ── Undefined assignment ──────────────────────────────────────────
 
 class TestUndefined:
-    def test_literal_undefined_error(self):
-        with pytest.raises(UzonRuntimeError, match="Cannot assign literal"):
-            evaluate("x is undefined")
+    def test_literal_undefined_allowed(self):
+        r = evaluate("x is undefined\ny is x or else 42")
+        assert r["y"] == 42
 
     def test_undefined_propagation(self):
         r = evaluate("x is missing or else 42")
