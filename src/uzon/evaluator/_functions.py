@@ -17,7 +17,7 @@ from ..types import (
     UzonBuiltinFunction, UzonEnum, UzonFloat, UzonFunction, UzonInt, UzonTaggedUnion,
     UzonUndefined,
 )
-from ._constants import INT_TYPE_RE
+from ._constants import FLOAT_TYPES, INT_TYPE_RE
 
 
 class FunctionMixin:
@@ -117,16 +117,26 @@ class FunctionMixin:
                 node.line, node.col, file=self._filename,
             )
         self._check_arg_count(func, args, node)
-        body_scope = Scope(parent=func.closure_scope, closure_scope=func.closure_scope)
+
+        # §3.8: Two-level scope for function bodies (matches _eval_function_call)
+        param_scope: dict[str, Any] = {}
         for i, (pname, ptype, pdefault) in enumerate(func.params):
             val = args[i] if i < len(args) else pdefault
             self._check_param_type(val, ptype, pname, node)
+            val = self._coerce_to_param_type(val, ptype)
+            param_scope[pname] = val
+
+        body_binding_scope = Scope(parent=func.closure_scope)
+        body_scope = Scope(parent=body_binding_scope, closure_scope=body_binding_scope)
+        for pname, val in param_scope.items():
             body_scope.define(pname, val)
+
         self._call_stack.append(func_id)
         try:
             for binding in func.body_bindings:
                 val = self._eval_node(binding.value, body_scope, binding.name)
                 body_scope.define(binding.name, val)
+                body_binding_scope.define(binding.name, val)
             result = self._eval_node(func.body_expr, body_scope, None)
         finally:
             self._call_stack.pop()
@@ -149,11 +159,9 @@ class FunctionMixin:
     def _coerce_to_param_type(self, value: Any, type_name: str) -> Any:
         """Coerce an adoptable literal to the declared parameter type."""
         tn = self._normalize_type_name(type_name)
-        if isinstance(value, UzonInt) and value.adoptable and tn in (
-            "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64"
-        ):
+        if isinstance(value, UzonInt) and value.adoptable and INT_TYPE_RE.match(tn):
             return UzonInt(int(value), tn)
-        if isinstance(value, UzonFloat) and value.adoptable and tn in ("f32", "f64"):
+        if isinstance(value, UzonFloat) and value.adoptable and tn in FLOAT_TYPES:
             return UzonFloat(float(value), tn)
         return value
 

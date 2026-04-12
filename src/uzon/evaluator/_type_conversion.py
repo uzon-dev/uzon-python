@@ -234,10 +234,7 @@ class TypeConversionMixin:
         self, value: str, sign: str, bits: int, type_name: str, node: Node
     ) -> UzonInt:
         try:
-            if value.startswith(('0x', '0X', '0o', '0O', '0b', '0B')):
-                int_val = int(value, 0)
-            else:
-                int_val = int(value, 10)
+            int_val = int(value, 0)
         except ValueError:
             raise UzonRuntimeError(
                 f"Cannot convert string {value!r} to {type_name}",

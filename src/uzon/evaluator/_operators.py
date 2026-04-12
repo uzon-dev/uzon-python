@@ -257,10 +257,6 @@ class OperatorMixin:
             if left.adoptable and not right.adoptable:
                 return right.type_name, adoptable
             return left.type_name, adoptable
-        if isinstance(left, UzonInt):
-            return left.type_name, False
-        if isinstance(right, UzonInt):
-            return right.type_name, False
         if isinstance(left, UzonFloat) and isinstance(right, UzonFloat):
             adoptable = left.adoptable and right.adoptable
             if left.adoptable and not right.adoptable:
@@ -271,6 +267,10 @@ class OperatorMixin:
             return right.type_name, False
         if isinstance(right, UzonInt) and right.adoptable and isinstance(left, UzonFloat):
             return left.type_name, False
+        if isinstance(left, UzonInt):
+            return left.type_name, False
+        if isinstance(right, UzonInt):
+            return right.type_name, False
         if isinstance(left, UzonFloat):
             return left.type_name, False
         if isinstance(right, UzonFloat):
