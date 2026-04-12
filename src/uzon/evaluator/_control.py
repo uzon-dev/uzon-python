@@ -323,6 +323,14 @@ class ControlMixin:
                 "Union must have at least 2 member types",
                 node.line, node.col, file=self._filename,
             )
+        seen: set[str] = set()
+        for tn in type_names:
+            if tn in seen:
+                raise UzonTypeError(
+                    f"Duplicate type '{tn}' in union definition",
+                    node.line, node.col, file=self._filename,
+                )
+            seen.add(tn)
         return UzonUnion(value, type_names)
 
     # ── tagged union (§3.7) ──────────────────────────────────────────
