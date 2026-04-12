@@ -541,8 +541,8 @@ class TestWithExtends:
         assert isinstance(b.value, StructOverride)
         assert isinstance(b.value.overrides, StructLiteral)
 
-    def test_extends(self):
-        doc = parse("x is base extends { b is 2 }")
+    def test_plus(self):
+        doc = parse("x is base plus { b is 2 }")
         b = doc.bindings[0]
         assert isinstance(b.value, StructExtension)
         assert isinstance(b.value.extensions, StructLiteral)
@@ -551,9 +551,9 @@ class TestWithExtends:
         with pytest.raises(UzonSyntaxError, match="Cannot chain"):
             parse("x is base with { a is 1 } with { b is 2 }")
 
-    def test_chained_extends_error(self):
+    def test_chained_plus_error(self):
         with pytest.raises(UzonSyntaxError, match="Cannot chain"):
-            parse("x is base extends { a is 1 } extends { b is 2 }")
+            parse("x is base plus { a is 1 } plus { b is 2 }")
 
 
 # ── Functions (§3.8) ──────────────────────────────────────────────
@@ -744,16 +744,6 @@ class TestNewlineSep:
 # ── References (§5.12, §5.13) ────────────────────────────────────
 
 class TestReferences:
-    def test_self_reserved(self):
-        """§5.12: self is a reserved keyword."""
-        with pytest.raises(UzonSyntaxError, match="reserved"):
-            parse("x is self")
-
-    def test_self_member_reserved(self):
-        """§5.12: self.name is not allowed."""
-        with pytest.raises(UzonSyntaxError, match="reserved"):
-            parse("x is self.y")
-
     def test_env(self):
         doc = parse("x is env.HOME")
         b = doc.bindings[0]

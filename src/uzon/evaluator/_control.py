@@ -141,7 +141,7 @@ class ControlMixin:
     # ── case/when (§5.10) ────────────────────────────────────────────
 
     def _eval_case(self, node: CaseExpr, scope, exclude: str | None) -> Any:
-        """§5.10: Evaluate `case scrutinee when v1 then r1 ... else default`."""
+        """§5.10: Evaluate `case [type|named] scrutinee when v1 then r1 ... else default`."""
         scrutinee = self._eval_node(node.scrutinee, scope, exclude)
 
         if scrutinee is UzonUndefined:
@@ -149,31 +149,44 @@ class ControlMixin:
                 "Cannot use 'case' on undefined — check with 'is undefined' first",
                 node.line, node.col, file=self._filename,
             )
-        if isinstance(scrutinee, UzonUnion):
-            raise UzonRuntimeError(
-                "Cannot use 'case' on untagged union — use tagged union with 'when named'",
-                node.line, node.col, file=self._filename,
-            )
+
+        # Determine case kind from when clauses (all share the same kind per parser)
+        case_kind = node.when_clauses[0].kind if node.when_clauses else "value"
+
+        if case_kind == "value":
+            if isinstance(scrutinee, UzonUnion):
+                raise UzonRuntimeError(
+                    "Cannot use 'case' on untagged union — use 'case type' for type dispatch",
+                    node.line, node.col, file=self._filename,
+                )
+        elif case_kind == "named":
+            if not isinstance(scrutinee, UzonTaggedUnion):
+                raise UzonTypeError(
+                    "'case named' requires a tagged union scrutinee",
+                    node.line, node.col, file=self._filename,
+                )
+        elif case_kind == "type":
+            if not isinstance(scrutinee, UzonUnion):
+                raise UzonTypeError(
+                    "'case type' requires an untagged union scrutinee",
+                    node.line, node.col, file=self._filename,
+                )
 
         result = None
         matched_idx: int | None = None
 
         for i, clause in enumerate(node.when_clauses):
-            if isinstance(clause.value, UndefinedLiteral):
+            # Validation runs for all clauses (even after a match)
+            if case_kind == "value" and isinstance(clause.value, UndefinedLiteral):
                 raise UzonRuntimeError(
                     "'when undefined' is not allowed",
                     clause.value.line, clause.value.col,
                     file=self._filename,
                 )
-            if clause.is_named:
-                if not isinstance(scrutinee, UzonTaggedUnion):
-                    raise UzonTypeError(
-                        "'when named' requires a tagged union scrutinee",
-                        clause.line, clause.col, file=self._filename,
-                    )
+            if case_kind == "named":
                 if not isinstance(clause.value, Identifier):
                     raise UzonRuntimeError(
-                        "'when named' requires a variant name",
+                        "'case named' requires a variant name in when clause",
                         clause.line, clause.col, file=self._filename,
                     )
                 if scrutinee.variants and clause.value.name not in scrutinee.variants:
@@ -182,10 +195,23 @@ class ControlMixin:
                         clause.value.line, clause.value.col,
                         file=self._filename,
                     )
+            if case_kind == "type":
+                if not isinstance(clause.value, Identifier):
+                    raise UzonRuntimeError(
+                        "'case type' requires a type name in when clause",
+                        clause.line, clause.col, file=self._filename,
+                    )
+
             if matched_idx is not None:
                 continue
-            if clause.is_named:
+
+            if case_kind == "named":
                 if scrutinee.tag == clause.value.name:
+                    result = self._eval_node(clause.result, scope, exclude)
+                    matched_idx = i
+            elif case_kind == "type":
+                type_name = clause.value.name
+                if self._value_matches_type(scrutinee.value, type_name):
                     result = self._eval_node(clause.result, scope, exclude)
                     matched_idx = i
             else:
@@ -362,3 +388,23 @@ class ControlMixin:
             )
         result = left.tag == tag_name
         return result if op == "is named" else not result
+
+    # ── is type (§5.2) ─────────────────────────────────────────────
+
+    def _eval_is_type(self, op: str, left: Any, node: BinaryOp) -> bool:
+        """§5.2: Evaluate `value is type T` / `value is not type T`."""
+        if left is UzonUndefined:
+            raise UzonRuntimeError(
+                "'is type' requires a value, got undefined",
+                node.line, node.col, file=self._filename,
+            )
+        if not isinstance(node.right, Identifier):
+            raise UzonRuntimeError(
+                "'is type' requires a type name on the right",
+                node.line, node.col, file=self._filename,
+            )
+        type_name = node.right.name
+        # §3.6: For unions, check inner value's type (transparency)
+        check_val = left.value if isinstance(left, UzonUnion) else left
+        result = self._value_matches_type(check_val, type_name)
+        return result if op == "is type" else not result

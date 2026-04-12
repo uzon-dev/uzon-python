@@ -116,10 +116,10 @@ class TestKeywordsAndComposite:
 
     def test_all_keywords(self):
         """All non-composite keywords tokenize correctly."""
-        for kw in ("from", "called", "as", "named", "with", "extends",
+        for kw in ("from", "called", "as", "named", "with", "plus",
                     "union", "function", "returns", "default", "to", "of",
                     "and", "not", "if", "then", "else", "case", "when",
-                    "self", "env", "struct", "in", "are"):
+                    "type", "env", "struct", "in", "are"):
             result = lex(kw)
             assert len(result) == 1 and result[0][1] == kw
 

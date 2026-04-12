@@ -174,21 +174,21 @@ class StructMixin:
     def _eval_struct_extension(
         self, node: StructExtension, scope: Scope, exclude: str | None
     ) -> dict[str, Any]:
-        """§3.2.2: Evaluate `base extends { fields }` — copy, override, and add."""
+        """§3.2.2: Evaluate `base plus { fields }` — copy, override, and add."""
         base = self._eval_node(node.base, scope, exclude)
         if base is UzonUndefined:
             raise UzonRuntimeError(
-                "'extends' requires a concrete struct, got undefined",
+                "'plus' requires a concrete struct, got undefined",
                 node.line, node.col, file=self._filename,
             )
         if isinstance(base, UzonTaggedUnion):
             raise UzonTypeError(
-                "'extends' requires a struct, not a tagged union",
+                "'plus' requires a struct, not a tagged union",
                 node.line, node.col, file=self._filename,
             )
         if not isinstance(base, dict):
             raise UzonTypeError(
-                f"'extends' requires a struct, got {self._type_name(base)}",
+                f"'plus' requires a struct, got {self._type_name(base)}",
                 node.line, node.col, file=self._filename,
             )
 
@@ -202,22 +202,22 @@ class StructMixin:
             value = self._eval_field_value(field, ext_scope, exclude)
             if value is UzonUndefined:
                 raise UzonTypeError(
-                    f"'extends' field: '{name}' cannot be undefined",
+                    f"'plus' field: '{name}' cannot be undefined",
                     field.line, field.col, file=self._filename,
                 )
             if is_existing:
-                value = self._check_override_compat(base[name], value, name, "extends", field)
+                value = self._check_override_compat(base[name], value, name, "plus", field)
                 overrides[name] = value
             else:
                 additions[name] = value
 
         if not additions:
             raise UzonTypeError(
-                "'extends' must add at least one new field — use 'with' for override-only",
+                "'plus' must add at least one new field — use 'with' for override-only",
                 node.line, node.col, file=self._filename,
             )
 
-        # Note: extends adds new fields, so the result is NOT the same type as base.
+        # Note: plus adds new fields, so the result is NOT the same type as base.
         # We intentionally do NOT preserve base's type_name here — the shape changed.
         result = dict(base)
         result.update(overrides)

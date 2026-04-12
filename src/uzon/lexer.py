@@ -32,7 +32,7 @@ _VALUE_TOKEN_TYPES: frozenset[TokenType] = frozenset({
     TokenType.IDENTIFIER,
     TokenType.TRUE, TokenType.FALSE, TokenType.NULL,
     TokenType.INF, TokenType.NAN, TokenType.UNDEFINED,
-    TokenType.SELF, TokenType.ENV,
+    TokenType.ENV,
     TokenType.RPAREN, TokenType.RBRACKET, TokenType.RBRACE,
 })
 
@@ -594,7 +594,7 @@ class Lexer:
     # ── composite operator lookahead (§9 lexer rules) ─────────────────
 
     def _emit_is_composite(self, line: int, col: int) -> None:
-        """§9: Handle ``is``, ``is not``, ``is named``, ``is not named``."""
+        """§9: Handle ``is``, ``is not``, ``is named``, ``is not named``, ``is type``, ``is not type``."""
         sp, sl, sc = self._pos, self._line, self._col
 
         self._skip_ws()
@@ -608,12 +608,21 @@ class Lexer:
                 self._consume_word(nxt2)
                 self._tokens.append(Token(TokenType.IS_NOT_NAMED, "is not named", line, col))
                 return
+            if nxt2 == "type":
+                self._consume_word(nxt2)
+                self._tokens.append(Token(TokenType.IS_NOT_TYPE, "is not type", line, col))
+                return
             self._tokens.append(Token(TokenType.IS_NOT, "is not", line, col))
             return
 
         if nxt == "named":
             self._consume_word(nxt)
             self._tokens.append(Token(TokenType.IS_NAMED, "is named", line, col))
+            return
+
+        if nxt == "type":
+            self._consume_word(nxt)
+            self._tokens.append(Token(TokenType.IS_TYPE, "is type", line, col))
             return
 
         self._pos, self._line, self._col = sp, sl, sc

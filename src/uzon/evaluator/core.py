@@ -259,7 +259,7 @@ class Evaluator(
         if isinstance(node, StructOverride):
             return self._eval_struct_override(node, scope, exclude)
 
-        # §3.2.2: extends — copy, override, and add
+        # §3.2.2: plus — copy, override, and add
         if isinstance(node, StructExtension):
             return self._eval_struct_extension(node, scope, exclude)
 
