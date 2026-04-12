@@ -339,6 +339,11 @@ class ControlMixin:
         variants: dict[str, str | None] = {}
         type_name: str | None = None
         for var_name, var_type in node.variants:
+            if var_name in variants:
+                raise UzonTypeError(
+                    f"Duplicate variant '{var_name}' in tagged union definition",
+                    node.line, node.col, file=self._filename,
+                )
             variants[var_name] = var_type.name if var_type else None
 
         if isinstance(node.value, TypeAnnotation):
