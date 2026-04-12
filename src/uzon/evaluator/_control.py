@@ -85,12 +85,12 @@ class ControlMixin:
         if isinstance(val, UzonUnion):
             return self._value_to_string(val.value, node)
         if isinstance(val, (dict, list, tuple)):
-            raise UzonRuntimeError(
+            raise UzonTypeError(
                 f"Cannot convert {type(val).__name__} to string",
                 node.line, node.col, file=self._filename,
             )
         if isinstance(val, (UzonFunction, UzonBuiltinFunction)):
-            raise UzonRuntimeError(
+            raise UzonTypeError(
                 "Cannot convert function to string",
                 node.line, node.col, file=self._filename,
             )
@@ -168,7 +168,7 @@ class ControlMixin:
 
         if case_kind == "value":
             if isinstance(scrutinee, UzonUnion):
-                raise UzonRuntimeError(
+                raise UzonTypeError(
                     "Cannot use 'case' on untagged union — use 'case type' for type dispatch",
                     node.line, node.col, file=self._filename,
                 )
@@ -273,14 +273,7 @@ class ControlMixin:
             result = self._eval_node(node.else_branch, else_scope, exclude)
 
         # §D.5: speculatively evaluate all non-selected branches for type checking.
-        # §5.10: For non-union scrutinees in case type, only one when branch can
-        # match, so cross-branch type checking is not required. For union/tagged
-        # union scrutinees, branches MUST produce the same result type — narrowed
-        # speculative evaluation suppresses type errors from the narrowed value
-        # not matching the branch's expected type.
-        is_union_scrutinee = isinstance(scrutinee, (UzonUnion, UzonTaggedUnion))
-        skip_branch_compat = scrutinee_name is not None and not is_union_scrutinee
-
+        # §5.10: All when and else branches MUST evaluate to the same type.
         branch_values = [result]
         for i, clause in enumerate(node.when_clauses):
             if i != matched_idx:
@@ -299,8 +292,7 @@ class ControlMixin:
                 spec_else = self._speculative_eval(node.else_branch, scope, exclude)
             if spec_else is not SPECULATIVE_FAILED:
                 branch_values.append(spec_else)
-        if not skip_branch_compat:
-            self._check_branch_type_compat(branch_values, node)
+        self._check_branch_type_compat(branch_values, node)
 
         return result
 

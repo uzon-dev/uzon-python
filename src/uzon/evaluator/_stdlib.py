@@ -14,7 +14,7 @@ from typing import Any
 
 from ..ast_nodes import Node
 from ..errors import UzonTypeError
-from ..types import UzonBuiltinFunction, UzonFloat, UzonFunction, UzonInt
+from ..types import UzonBuiltinFunction, UzonFloat, UzonFunction, UzonInt, UzonUndefined
 
 
 class StdlibMixin:
@@ -85,7 +85,7 @@ class StdlibMixin:
                     "std.get: list index must be an integer",
                     node.line, node.col, file=self._filename,
                 )
-            from ..types import UzonUndefined
+
             idx = int(key)
             if 0 <= idx < len(collection):
                 return collection[idx]
@@ -96,7 +96,7 @@ class StdlibMixin:
                     "std.get: tuple index must be an integer",
                     node.line, node.col, file=self._filename,
                 )
-            from ..types import UzonUndefined
+
             idx = int(key)
             if 0 <= idx < len(collection):
                 return collection[idx]
@@ -107,7 +107,7 @@ class StdlibMixin:
                     "std.get: struct key must be a string",
                     node.line, node.col, file=self._filename,
                 )
-            from ..types import UzonUndefined
+
             return collection.get(key, UzonUndefined)
         raise UzonTypeError(
             f"std.get expects a list, tuple, or struct, got {self._type_name(collection)}",

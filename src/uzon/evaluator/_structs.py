@@ -22,6 +22,12 @@ from ..types import UzonFloat, UzonInt, UzonStruct, UzonTaggedUnion, UzonUndefin
 from ._constants import INT_TYPE_RE
 
 
+_ORDINALS = {
+    "first": 0, "second": 1, "third": 2, "fourth": 3, "fifth": 4,
+    "sixth": 5, "seventh": 6, "eighth": 7, "ninth": 8, "tenth": 9,
+}
+
+
 class StructMixin:
     """Struct and member access methods mixed into the Evaluator."""
 
@@ -68,11 +74,7 @@ class StructMixin:
             return UzonUndefined
         except ValueError:
             pass
-        ordinals = {
-            "first": 0, "second": 1, "third": 2, "fourth": 3, "fifth": 4,
-            "sixth": 5, "seventh": 6, "eighth": 7, "ninth": 8, "tenth": 9,
-        }
-        idx = ordinals.get(member)
+        idx = _ORDINALS.get(member)
         if idx is not None and 0 <= idx < len(obj):
             return obj[idx]
         return UzonUndefined
@@ -91,11 +93,7 @@ class StructMixin:
                 return UzonUndefined
             except ValueError:
                 pass
-            ordinals = {
-                "first": 0, "second": 1, "third": 2, "fourth": 3, "fifth": 4,
-                "sixth": 5, "seventh": 6, "eighth": 7, "ninth": 8, "tenth": 9,
-            }
-            idx = ordinals.get(member)
+            idx = _ORDINALS.get(member)
             if idx is not None and 0 <= idx < len(inner):
                 return inner[idx]
         return UzonUndefined
@@ -350,7 +348,8 @@ class StructMixin:
                 f"Import file not found: {resolved}", node.line, node.col,
                 file=self._filename,
             )
-        source = open(resolved, encoding="utf-8").read()
+        with open(resolved, encoding="utf-8") as f:
+            source = f.read()
 
         self._import_stack.append(resolved)
         old_filename = self._filename
