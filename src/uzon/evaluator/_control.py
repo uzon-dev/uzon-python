@@ -224,6 +224,16 @@ class ControlMixin:
                         clause.value.line, clause.value.col,
                         file=self._filename,
                     )
+                # §5.10: When scrutinee is a tagged union, validate against inner types
+                if isinstance(scrutinee, UzonTaggedUnion):
+                    inner_types = {t for t in scrutinee.variants.values() if t is not None}
+                    if clause.value.name not in inner_types:
+                        raise UzonTypeError(
+                            f"'{clause.value.name}' is not an inner type of this tagged union "
+                            f"(inner types: {', '.join(sorted(inner_types))})",
+                            clause.value.line, clause.value.col,
+                            file=self._filename,
+                        )
 
             # §5.10: Build narrowed scope for this branch
             branch_scope = scope
