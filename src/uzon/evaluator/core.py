@@ -122,12 +122,6 @@ class Evaluator(
         if isinstance(b, AreBinding):
             return self._eval_are_binding(b, scope)
 
-        if isinstance(b.value, UndefinedLiteral):
-            raise UzonRuntimeError(
-                f"Cannot assign literal 'undefined' to '{b.name}'",
-                b.value.line, b.value.col, file=self._filename,
-            )
-
         value = self._eval_node(b.value, scope, exclude=b.name)
 
         # §6.1: Empty list requires type annotation (relaxed inside struct literals)
