@@ -136,6 +136,13 @@ class Parser:
         composite ``is not``/``is named``/``is not named`` at binding position
         decomposes into ``is`` (binding) + remaining tokens (value expression).
         """
+        # §11.2: suggest @escape when a keyword appears at binding-name position.
+        peeked = self._peek()
+        if peeked.type != TokenType.IDENTIFIER and peeked.value in ALL_KEYWORDS:
+            raise self._error(
+                f"'{peeked.value}' is a keyword and cannot be used as a binding name. "
+                f"Did you mean '@{peeked.value}'?"
+            )
         name_tok = self._expect(TokenType.IDENTIFIER)
         name, line, col = name_tok.value, name_tok.line, name_tok.col
         tok = self._peek()
