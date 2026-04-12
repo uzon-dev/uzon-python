@@ -392,6 +392,11 @@ class TypeChecksMixin:
                     return True
                 return a.type_name == b.type_name
             return True
+        # §5 line 1220: Cross-category — adoptable integer literal → float type
+        if isinstance(a, UzonInt) and a.adoptable and isinstance(b, float):
+            return True
+        if isinstance(b, UzonInt) and b.adoptable and isinstance(a, float):
+            return True
         if isinstance(a, tuple) and isinstance(b, tuple):
             if len(a) != len(b):
                 return False
