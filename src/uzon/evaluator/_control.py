@@ -288,6 +288,15 @@ class ControlMixin:
                 "Enum must have at least 2 variants",
                 node.line, node.col, file=self._filename,
             )
+        # §3.5/§9: Duplicate variant names are a type error.
+        seen: set[str] = set()
+        for v in node.variants:
+            if v in seen:
+                raise UzonTypeError(
+                    f"Duplicate variant '{v}' in enum definition",
+                    node.line, node.col, file=self._filename,
+                )
+            seen.add(v)
         variant_name = node.value.name
         if variant_name not in node.variants:
             raise UzonTypeError(
