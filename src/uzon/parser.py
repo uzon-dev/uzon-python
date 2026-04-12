@@ -539,15 +539,10 @@ class Parser:
             self._skip_nl_if_cont()
         return node
 
-    @staticmethod
-    def _is_non_callable(node: Node) -> bool:
-        """Struct and list literals are never callable; a trailing '(' would
-        incorrectly consume the next expression."""
-        return isinstance(node, (StructLiteral, ListLiteral))
-
     def _parse_call_or_access(self) -> Node:
         """§9 call_or_access: primary {'.' member | '(' args ')'}."""
         node = self._parse_primary()
+        crossed_nl = self._peek_type() == TokenType.NEWLINE
         self._skip_nl_if_cont()
         while True:
             tt = self._peek_type()
@@ -559,7 +554,8 @@ class Parser:
                     node = MemberAccess(object=node, member=tok.value, line=tok.line, col=tok.col)
                 else:
                     raise self._error(f"Expected member name after '.', got {tok.type.name}")
-            elif tt == TokenType.LPAREN and not self._is_non_callable(node):
+            elif tt == TokenType.LPAREN and not crossed_nl:
+                # §5.15: opening ( must be on the same line as the callee.
                 tok = self._advance()  # (
                 self._skip_nl()
                 args: list[Node] = []
@@ -577,6 +573,7 @@ class Parser:
                 node = FunctionCall(callee=node, args=args, line=tok.line, col=tok.col)
             else:
                 break
+            crossed_nl = self._peek_type() == TokenType.NEWLINE
             self._skip_nl_if_cont()
         return node
 
