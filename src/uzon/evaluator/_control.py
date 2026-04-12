@@ -197,6 +197,14 @@ class ControlMixin:
                         "'case type' requires a type name in when clause",
                         clause.line, clause.col, file=self._filename,
                     )
+                # §5.10: When scrutinee is a union, validate against member types
+                if isinstance(scrutinee, UzonUnion) and clause.value.name not in scrutinee.types:
+                    raise UzonTypeError(
+                        f"'{clause.value.name}' is not a member type of this union "
+                        f"(members: {', '.join(scrutinee.types)})",
+                        clause.value.line, clause.value.col,
+                        file=self._filename,
+                    )
 
             if matched_idx is not None:
                 continue
