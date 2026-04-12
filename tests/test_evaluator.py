@@ -269,7 +269,7 @@ class TestWithExtends:
         assert r["result"]["y"] == 2
 
     def test_with_nonexistent_field_error(self):
-        with pytest.raises(UzonRuntimeError, match="does not exist"):
+        with pytest.raises(UzonTypeError, match="does not exist"):
             evaluate("base is { x is 1 }\nresult is base with { z is 5 }")
 
     def test_plus_add_field(self):

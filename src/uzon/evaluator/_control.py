@@ -181,9 +181,9 @@ class ControlMixin:
         elif case_kind == "type":
             pass  # §5.10: case type works on any value
 
-        # §5.10 branch narrowing: identify scrutinee name for case type
+        # §5.10 branch narrowing: identify scrutinee name for case type/named
         scrutinee_name: str | None = None
-        if case_kind == "type" and isinstance(node.scrutinee, Identifier):
+        if case_kind in ("type", "named") and isinstance(node.scrutinee, Identifier):
             scrutinee_name = node.scrutinee.name
 
         result = None
@@ -238,7 +238,7 @@ class ControlMixin:
 
             if case_kind == "named":
                 if scrutinee.tag == clause.value.name:
-                    result = self._eval_node(clause.result, scope, exclude)
+                    result = self._eval_node(clause.result, branch_scope, exclude)
                     matched_idx = i
             elif case_kind == "type":
                 type_name = clause.value.name
@@ -252,28 +252,45 @@ class ControlMixin:
                     result = self._eval_node(clause.result, scope, exclude)
                     matched_idx = i
 
+        # §5.10: Build narrowed scope for the else branch too
+        else_scope = scope
+        if scrutinee_name is not None:
+            narrowed = scrutinee.value if isinstance(scrutinee, (UzonUnion, UzonTaggedUnion)) else scrutinee
+            else_scope = Scope(parent=scope)
+            else_scope.define(scrutinee_name, narrowed)
+
         if matched_idx is None:
-            result = self._eval_node(node.else_branch, scope, exclude)
+            result = self._eval_node(node.else_branch, else_scope, exclude)
 
         # §D.5: speculatively evaluate all non-selected branches for type checking.
-        # §5.10: For case type, non-selected branches are type-checked against
-        # their narrowed type — suppress type errors since the narrowed value
-        # cannot be fully simulated for a non-matching branch.
+        # §5.10: For non-union scrutinees in case type, only one when branch can
+        # match, so cross-branch type checking is not required. For union/tagged
+        # union scrutinees, branches MUST produce the same result type — narrowed
+        # speculative evaluation suppresses type errors from the narrowed value
+        # not matching the branch's expected type.
+        is_union_scrutinee = isinstance(scrutinee, (UzonUnion, UzonTaggedUnion))
+        skip_branch_compat = scrutinee_name is not None and not is_union_scrutinee
+
         branch_values = [result]
         for i, clause in enumerate(node.when_clauses):
             if i != matched_idx:
                 ns = narrowed_scopes[i] if i < len(narrowed_scopes) else scope
-                if case_kind == "type":
+                if case_kind in ("type", "named"):
                     spec = self._speculative_eval_narrowed(clause.result, ns, exclude)
                 else:
                     spec = self._speculative_eval(clause.result, ns, exclude)
                 if spec is not SPECULATIVE_FAILED:
                     branch_values.append(spec)
         if matched_idx is not None:
-            spec_else = self._speculative_eval(node.else_branch, scope, exclude)
+            if case_kind in ("type", "named"):
+                spec_else = self._speculative_eval_narrowed(
+                    node.else_branch, else_scope, exclude)
+            else:
+                spec_else = self._speculative_eval(node.else_branch, scope, exclude)
             if spec_else is not SPECULATIVE_FAILED:
                 branch_values.append(spec_else)
-        self._check_branch_type_compat(branch_values, node)
+        if not skip_branch_compat:
+            self._check_branch_type_compat(branch_values, node)
 
         return result
 
@@ -465,7 +482,7 @@ class ControlMixin:
                 node.line, node.col, file=self._filename,
             )
         type_name = node.right.name
-        # §3.6: For unions, check inner value's type (transparency)
-        check_val = left.value if isinstance(left, UzonUnion) else left
+        # §5.2: For unions (tagged or untagged), check inner value's type
+        check_val = left.value if isinstance(left, (UzonUnion, UzonTaggedUnion)) else left
         result = self._value_matches_type(check_val, type_name)
         return result if op == "is type" else not result

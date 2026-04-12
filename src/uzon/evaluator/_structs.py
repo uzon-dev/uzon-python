@@ -143,13 +143,13 @@ class StructMixin:
         for field in node.overrides.fields:
             name = field.name
             if name not in base:
-                raise UzonRuntimeError(
+                raise UzonTypeError(
                     f"'with' override: field '{name}' does not exist in base struct",
                     field.line, field.col, file=self._filename,
                 )
             value = self._eval_field_value(field, override_scope, exclude)
             if value is UzonUndefined:
-                raise UzonTypeError(
+                raise UzonRuntimeError(
                     f"'with' override: field '{name}' cannot be undefined",
                     field.line, field.col, file=self._filename,
                 )
@@ -209,7 +209,7 @@ class StructMixin:
             is_existing = name in base
             value = self._eval_field_value(field, ext_scope, exclude)
             if value is UzonUndefined:
-                raise UzonTypeError(
+                raise UzonRuntimeError(
                     f"'plus' field: '{name}' cannot be undefined",
                     field.line, field.col, file=self._filename,
                 )
