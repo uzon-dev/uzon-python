@@ -36,7 +36,7 @@ class TokenType(Enum):
     AS = auto()         # §6.1: type annotation
     NAMED = auto()      # §3.7: tagged union variant
     WITH = auto()       # §3.2.1: struct override
-    EXTENDS = auto()    # §3.2.2: struct extension
+    KW_PLUS = auto()    # §3.2.2: struct extension (plus)
     UNION = auto()      # §3.6: union type marker
 
     # ── Keywords — functions (§3.8) ───────────────────────────────
@@ -60,8 +60,10 @@ class TokenType(Enum):
     CASE = auto()       # §5.10: multi-branch conditional
     WHEN = auto()       # §5.10: case clause
 
+    # ── Keywords — type check (§2.5) ───────────────────────────────
+    TYPE = auto()       # §5.2: type check (is type / is not type)
+
     # ── Keywords — references (§2.5) ──────────────────────────────
-    SELF = auto()       # §5.12: reserved keyword
     ENV = auto()        # §5.13: environment variable access
 
     # ── Keywords — import (§2.5) ──────────────────────────────────
@@ -75,6 +77,8 @@ class TokenType(Enum):
     IS_NOT = auto()        # §5.2: inequality
     IS_NAMED = auto()      # §3.7.2: variant check
     IS_NOT_NAMED = auto()  # §3.7.2: negated variant check
+    IS_TYPE = auto()       # §5.2: type check
+    IS_NOT_TYPE = auto()   # §5.2: negated type check
 
     # ── Arithmetic operators (§2.6, §5.3) ─────────────────────────
     PLUS = auto()          # +
@@ -123,7 +127,7 @@ KEYWORDS: dict[str, TokenType] = {
     "as": TokenType.AS,
     "named": TokenType.NAMED,
     "with": TokenType.WITH,
-    "extends": TokenType.EXTENDS,
+    "plus": TokenType.KW_PLUS,
     "union": TokenType.UNION,
     "function": TokenType.FUNCTION,
     "returns": TokenType.RETURNS,
@@ -138,7 +142,7 @@ KEYWORDS: dict[str, TokenType] = {
     "else": TokenType.ELSE,
     "case": TokenType.CASE,
     "when": TokenType.WHEN,
-    "self": TokenType.SELF,
+    "type": TokenType.TYPE,
     "env": TokenType.ENV,
     "struct": TokenType.STRUCT,
     "in": TokenType.IN,
@@ -151,7 +155,7 @@ KEYWORDS: dict[str, TokenType] = {
 }
 
 # Reserved keywords (§2.5) — recognized but not yet assigned semantics.
-RESERVED_KEYWORDS: set[str] = {"lazy", "type"}
+RESERVED_KEYWORDS: set[str] = {"lazy"}
 
 ALL_KEYWORDS: set[str] = set(KEYWORDS) | RESERVED_KEYWORDS
 

@@ -68,6 +68,18 @@ class Parser:
             return self._advance()
         return None
 
+    # Token types that are valid as type names in ``is type`` / ``case type``
+    _TYPE_NAME_TOKENS: frozenset[TokenType] = frozenset({
+        TokenType.IDENTIFIER, TokenType.NULL, TokenType.STRUCT,
+    })
+
+    def _expect_type_name(self) -> Token:
+        """Expect a type name — IDENTIFIER or keyword that doubles as a type (e.g. null)."""
+        tok = self._peek()
+        if tok.type in self._TYPE_NAME_TOKENS:
+            return self._advance()
+        raise self._error(f"Expected type name, got {tok.type.name} ({tok.value!r})")
+
     def _error(self, msg: str) -> UzonSyntaxError:
         tok = self._peek()
         return UzonSyntaxError(msg, tok.line, tok.col, file=self._file)
@@ -96,7 +108,8 @@ class Parser:
         if t1.type == TokenType.IDENTIFIER and i + 1 < len(self._tokens):
             t2 = self._tokens[i + 1]
             if t2.type in (TokenType.IS, TokenType.IS_NOT, TokenType.IS_NAMED,
-                           TokenType.IS_NOT_NAMED, TokenType.ARE):
+                           TokenType.IS_NOT_NAMED, TokenType.IS_TYPE,
+                           TokenType.IS_NOT_TYPE, TokenType.ARE):
                 return True
         return False
 
@@ -155,6 +168,19 @@ class Parser:
             expr = self._parse_expression()
             return Binding(name=name, value=expr, called=self._try_called(), line=line, col=col)
 
+        if tok.type == TokenType.IS_TYPE:
+            self._advance()
+            self._tokens.insert(self._pos, Token(TokenType.IDENTIFIER, "type", tok.line, tok.col))
+            expr = self._parse_expression()
+            return Binding(name=name, value=expr, called=self._try_called(), line=line, col=col)
+
+        if tok.type == TokenType.IS_NOT_TYPE:
+            self._advance()
+            self._tokens.insert(self._pos, Token(TokenType.NOT, "not", tok.line, tok.col))
+            self._tokens.insert(self._pos + 1, Token(TokenType.IDENTIFIER, "type", tok.line, tok.col))
+            expr = self._parse_expression()
+            return Binding(name=name, value=expr, called=self._try_called(), line=line, col=col)
+
         raise self._error(f"Expected 'is' or 'are' after binding name '{name}'")
 
     def _parse_is_binding(self, name: str, line: int, col: int) -> Binding:
@@ -184,7 +210,8 @@ class Parser:
             if self._peek_type() == TokenType.IDENTIFIER:
                 nxt = self._peek_at(1)
                 if nxt.type in (TokenType.IS, TokenType.IS_NOT, TokenType.IS_NAMED,
-                                TokenType.IS_NOT_NAMED, TokenType.ARE):
+                                TokenType.IS_NOT_NAMED, TokenType.IS_TYPE,
+                                TokenType.IS_NOT_TYPE, TokenType.ARE):
                     break
             elements.append(self._parse_expression())
 
@@ -253,7 +280,7 @@ class Parser:
         return self._parse_equality()
 
     def _parse_equality(self) -> Node:
-        """§5.1/§5.2: is, is not, is named, is not named — precedence 14, no chaining."""
+        """§5.1/§5.2: is, is not, is named, is not named, is type, is not type — precedence 14."""
         left = self._parse_membership()
         self._skip_nl_if_cont()
         tok = self._peek()
@@ -264,10 +291,22 @@ class Parser:
             return BinaryOp(op="is not named", left=left,
                             right=Identifier(name=n.value, line=n.line, col=n.col),
                             line=tok.line, col=tok.col)
+        if tok.type == TokenType.IS_NOT_TYPE:
+            self._advance()
+            n = self._expect_type_name()
+            return BinaryOp(op="is not type", left=left,
+                            right=Identifier(name=n.value, line=n.line, col=n.col),
+                            line=tok.line, col=tok.col)
         if tok.type == TokenType.IS_NAMED:
             self._advance()
             n = self._expect(TokenType.IDENTIFIER)
             return BinaryOp(op="is named", left=left,
+                            right=Identifier(name=n.value, line=n.line, col=n.col),
+                            line=tok.line, col=tok.col)
+        if tok.type == TokenType.IS_TYPE:
+            self._advance()
+            n = self._expect_type_name()
+            return BinaryOp(op="is type", left=left,
                             right=Identifier(name=n.value, line=n.line, col=n.col),
                             line=tok.line, col=tok.col)
         if tok.type == TokenType.IS_NOT:
@@ -455,7 +494,7 @@ class Parser:
         return node
 
     def _parse_struct_override(self) -> Node:
-        """§9: conversion [(``with`` | ``extends``) struct_literal]."""
+        """§9: conversion [(``with`` | ``plus``) struct_literal]."""
         node = self._parse_conversion()
         self._skip_nl_if_cont()
         if self._peek_type() == TokenType.WITH:
@@ -463,15 +502,15 @@ class Parser:
             s = self._parse_struct_literal()
             node = StructOverride(base=node, overrides=s, line=tok.line, col=tok.col)
             self._skip_nl_if_cont()
-            if self._peek_type() in (TokenType.WITH, TokenType.EXTENDS):
-                raise self._error("Cannot chain 'with'/'extends' — use an intermediate binding")
-        elif self._peek_type() == TokenType.EXTENDS:
+            if self._peek_type() in (TokenType.WITH, TokenType.KW_PLUS):
+                raise self._error("Cannot chain 'with'/'plus' — use an intermediate binding")
+        elif self._peek_type() == TokenType.KW_PLUS:
             tok = self._advance()
             s = self._parse_struct_literal()
             node = StructExtension(base=node, extensions=s, line=tok.line, col=tok.col)
             self._skip_nl_if_cont()
-            if self._peek_type() in (TokenType.WITH, TokenType.EXTENDS):
-                raise self._error("Cannot chain 'with'/'extends' — use an intermediate binding")
+            if self._peek_type() in (TokenType.WITH, TokenType.KW_PLUS):
+                raise self._error("Cannot chain 'with'/'plus' — use an intermediate binding")
         return node
 
     def _parse_conversion(self) -> Node:
@@ -503,9 +542,16 @@ class Parser:
     def _parse_call_or_access(self) -> Node:
         """§9 call_or_access: primary {'.' member | '(' args ')'}."""
         node = self._parse_primary()
+        crossed_nl = self._peek_type() == TokenType.NEWLINE
         self._skip_nl_if_cont()
-        while self._peek_type() in (TokenType.DOT, TokenType.LPAREN):
-            if self._peek_type() == TokenType.DOT:
+        while True:
+            tt = self._peek_type()
+            # §8: LPAREN after a newline is a new expression, not a call continuation.
+            if tt == TokenType.LPAREN and crossed_nl:
+                break
+            if tt not in (TokenType.DOT, TokenType.LPAREN):
+                break
+            if tt == TokenType.DOT:
                 self._advance()
                 tok = self._peek()
                 if tok.type in (TokenType.INTEGER, TokenType.IDENTIFIER):
@@ -529,6 +575,7 @@ class Parser:
                         self._skip_nl()
                 self._expect(TokenType.RPAREN)
                 node = FunctionCall(callee=node, args=args, line=tok.line, col=tok.col)
+            crossed_nl = self._peek_type() == TokenType.NEWLINE
             self._skip_nl_if_cont()
         return node
 
@@ -563,8 +610,6 @@ class Parser:
         if tok.type == TokenType.NAN:
             self._advance()
             return NanLiteral(line=tok.line, col=tok.col)
-        if tok.type == TokenType.SELF:
-            raise self._error("'self' is a reserved keyword and cannot be used")
         if tok.type == TokenType.ENV:
             self._advance()
             return EnvRef(line=tok.line, col=tok.col)
@@ -686,25 +731,32 @@ class Parser:
                       line=tok.line, col=tok.col)
 
     def _parse_case_expr(self) -> CaseExpr:
-        """§5.10: case expr when value then expr ... else expr."""
+        """§5.10: case [type|named] expr when ... then expr ... else expr."""
         tok = self._expect(TokenType.CASE)
+        case_kind = "value"
+        if self._peek_type() == TokenType.TYPE:
+            self._advance()
+            case_kind = "type"
+        elif self._peek_type() == TokenType.NAMED:
+            self._advance()
+            case_kind = "named"
         scrutinee = self._parse_expression()
         whens: list[WhenClause] = []
         self._skip_nl()
         while self._peek_type() == TokenType.WHEN:
             wt = self._advance()
             self._skip_nl()
-            is_named = False
-            if self._peek_type() == TokenType.NAMED:
-                self._advance()
-                is_named = True
+            if case_kind == "named":
                 nt = self._expect(TokenType.IDENTIFIER)
                 val: Node = Identifier(name=nt.value, line=nt.line, col=nt.col)
+            elif case_kind == "type":
+                nt = self._expect_type_name()
+                val = Identifier(name=nt.value, line=nt.line, col=nt.col)
             else:
                 val = self._parse_expression()
             self._expect(TokenType.THEN)
             result = self._parse_expression()
-            whens.append(WhenClause(value=val, result=result, is_named=is_named,
+            whens.append(WhenClause(value=val, result=result, kind=case_kind,
                                     line=wt.line, col=wt.col))
             self._skip_nl()
         if not whens:

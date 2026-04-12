@@ -272,17 +272,17 @@ class TestWithExtends:
         with pytest.raises(UzonRuntimeError, match="does not exist"):
             evaluate("base is { x is 1 }\nresult is base with { z is 5 }")
 
-    def test_extends_add_field(self):
-        r = evaluate("base is { x is 1 }\nresult is base extends { y is 2 }")
+    def test_plus_add_field(self):
+        r = evaluate("base is { x is 1 }\nresult is base plus { y is 2 }")
         assert r["result"]["x"] == 1
         assert r["result"]["y"] == 2
 
-    def test_extends_no_new_field_error(self):
+    def test_plus_no_new_field_error(self):
         with pytest.raises(UzonTypeError, match="must add at least one"):
-            evaluate("base is { x is 1 }\nresult is base extends { x is 2 }")
+            evaluate("base is { x is 1 }\nresult is base plus { x is 2 }")
 
-    def test_extends_override_and_add(self):
-        r = evaluate("base is { x is 1 }\nresult is base extends { x is 10, y is 2 }")
+    def test_plus_override_and_add(self):
+        r = evaluate("base is { x is 1 }\nresult is base plus { x is 10, y is 2 }")
         assert r["result"]["x"] == 10
         assert r["result"]["y"] == 2
 
@@ -374,7 +374,7 @@ class TestCaseExpr:
     def test_case_with_tagged_union(self):
         r = evaluate(
             'x is "hi" named s from n as i32, s as string\n'
-            'y is case x when named n then "number" when named s then "string" else "unknown"'
+            'y is case named x when n then "number" when s then "string" else "unknown"'
         )
         assert r["y"] == "string"
 

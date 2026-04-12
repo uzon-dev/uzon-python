@@ -118,7 +118,7 @@ class WhenClause(Node):
     """§5.10: A single ``when`` clause in a ``case`` expression."""
     value: Node = field(default_factory=Node)
     result: Node = field(default_factory=Node)
-    is_named: bool = False  # when named <variant> for tagged unions (§3.7.2)
+    kind: str = "value"  # "value" | "type" | "named" — set by case [type|named]
 
 @dataclass
 class CaseExpr(Node):
@@ -160,7 +160,7 @@ class StructOverride(Node):
 
 @dataclass
 class StructExtension(Node):
-    """§3.2.2: Struct extension — expr ``extends`` struct_literal."""
+    """§3.2.2: Struct extension — expr ``plus`` struct_literal."""
     base: Node = field(default_factory=Node)
     extensions: StructLiteral = None  # type: ignore[assignment]
 
