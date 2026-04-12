@@ -90,6 +90,17 @@ class StdlibMixin:
             if 0 <= idx < len(collection):
                 return collection[idx]
             return UzonUndefined
+        if isinstance(collection, tuple):
+            if not isinstance(key, int):
+                raise UzonTypeError(
+                    "std.get: tuple index must be an integer",
+                    node.line, node.col, file=self._filename,
+                )
+            from ..types import UzonUndefined
+            idx = int(key)
+            if 0 <= idx < len(collection):
+                return collection[idx]
+            return UzonUndefined
         if isinstance(collection, dict):
             if not isinstance(key, str):
                 raise UzonTypeError(
@@ -99,7 +110,7 @@ class StdlibMixin:
             from ..types import UzonUndefined
             return collection.get(key, UzonUndefined)
         raise UzonTypeError(
-            f"std.get expects a list or struct, got {self._type_name(collection)}",
+            f"std.get expects a list, tuple, or struct, got {self._type_name(collection)}",
             node.line, node.col, file=self._filename,
         )
 

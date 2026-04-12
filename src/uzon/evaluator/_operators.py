@@ -266,6 +266,11 @@ class OperatorMixin:
             if left.adoptable and not right.adoptable:
                 return right.type_name, adoptable
             return left.type_name, adoptable
+        # §5 line 1220: Cross-category — adoptable integer literal → float type
+        if isinstance(left, UzonInt) and left.adoptable and isinstance(right, UzonFloat):
+            return right.type_name, False
+        if isinstance(right, UzonInt) and right.adoptable and isinstance(left, UzonFloat):
+            return left.type_name, False
         if isinstance(left, UzonFloat):
             return left.type_name, False
         if isinstance(right, UzonFloat):
@@ -318,13 +323,14 @@ class OperatorMixin:
         self._require_same_type(left, right, op, node)
 
         result_type, result_adoptable = self._resolve_numeric_type(left, right)
+        use_float = isinstance(left, float) or isinstance(right, float)
 
         if op == "+":
-            result = int(left) + int(right) if isinstance(left, int) else float(left) + float(right)
+            result = float(left) + float(right) if use_float else int(left) + int(right)
         elif op == "-":
-            result = int(left) - int(right) if isinstance(left, int) else float(left) - float(right)
+            result = float(left) - float(right) if use_float else int(left) - int(right)
         elif op == "*":
-            result = int(left) * int(right) if isinstance(left, int) else float(left) * float(right)
+            result = float(left) * float(right) if use_float else int(left) * int(right)
         elif op == "/":
             result = self._eval_division(left, right, result_type, result_adoptable, node)
             if isinstance(result, (UzonInt, UzonFloat)):
@@ -352,36 +358,38 @@ class OperatorMixin:
         result_adoptable: bool, node: Node,
     ) -> Any:
         """§5.3: Division with zero handling."""
+        use_float = isinstance(left, float) or isinstance(right, float)
         if right == 0:
-            if isinstance(left, float):
+            if use_float:
                 if left == 0.0:
                     return self._typed_float_result(float("nan"), result_type, adoptable=result_adoptable)
                 return self._typed_float_result(
-                    math.copysign(float("inf"), math.copysign(1.0, left) * math.copysign(1.0, right)),
+                    math.copysign(float("inf"), math.copysign(1.0, float(left)) * math.copysign(1.0, float(right))),
                     result_type, adoptable=result_adoptable)
             raise UzonRuntimeError(
                 "Division by zero", node.line, node.col,
                 file=self._filename,
             )
-        if isinstance(left, int):
-            return _trunc_div(int(left), int(right))
-        return float(left) / float(right)
+        if use_float:
+            return float(left) / float(right)
+        return _trunc_div(int(left), int(right))
 
     def _eval_modulo(
         self, left: Any, right: Any, result_type: str | None,
         result_adoptable: bool, node: Node,
     ) -> Any:
         """§5.3: Modulo with zero handling."""
+        use_float = isinstance(left, float) or isinstance(right, float)
         if right == 0:
-            if isinstance(left, float):
+            if use_float:
                 return self._typed_float_result(float("nan"), result_type, adoptable=result_adoptable)
             raise UzonRuntimeError(
                 "Modulo by zero", node.line, node.col,
                 file=self._filename,
             )
-        if isinstance(left, int):
-            return _trunc_mod(int(left), int(right))
-        return math.fmod(float(left), float(right))
+        if use_float:
+            return math.fmod(float(left), float(right))
+        return _trunc_mod(int(left), int(right))
 
     def _eval_power(
         self, left: Any, right: Any, result_type: str | None,
