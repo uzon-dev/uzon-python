@@ -546,8 +546,9 @@ class Parser:
         self._skip_nl_if_cont()
         while True:
             tt = self._peek_type()
-            # §8: LPAREN after a newline is a new expression, not a call continuation.
-            if tt == TokenType.LPAREN and crossed_nl:
+            # §8: LPAREN after a newline is a new expression, not a call
+            # continuation — unless the node is callable (identifier / member).
+            if tt == TokenType.LPAREN and crossed_nl and not isinstance(node, (Identifier, MemberAccess)):
                 break
             if tt not in (TokenType.DOT, TokenType.LPAREN):
                 break
