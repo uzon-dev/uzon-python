@@ -1,6 +1,6 @@
 # uzon
 
-A Python parser and generator for the [UZON](https://uzon.dev) typed data expression format — spec v0.6.
+A Python parser and generator for the [UZON](https://uzon.dev) typed data expression format — spec v0.7.
 
 ```python
 import uzon
@@ -18,7 +18,7 @@ print(data["server"]["port"])   # UzonInt(8080, 'u16')
 
 ```python
 >>> uzon.__version__
-'0.6.0'
+'0.7.0'
 ```
 
 ## Installation
@@ -125,7 +125,25 @@ label is case color
 dev_server is server with { port is 3000 as u16 }
 
 // Extension
-extended is server extends { timeout is 30 }
+extended is server plus { timeout is 30, tls is true }
+
+// Field extraction
+port is of server
+
+// Type check
+check is value is type i32
+
+// Type dispatch
+label is case type value
+    when i32 then "integer"
+    when f64 then "float"
+    else "other"
+
+// Variant dispatch
+report is case named result
+    when ok then "success"
+    when err then "failure"
+    else "unknown"
 
 // Environment variables
 host is env.HOST or else "localhost"
@@ -204,7 +222,7 @@ def dumps(value: dict[str, Any], *, indent: int = 4) -> str
 | `value`  | `dict[str, Any]` | *(required)* | A dict representing a UZON document.    |
 | `indent` | `int`            | `4`          | Number of spaces per indentation level. |
 
-**Returns:** `str` ��� UZON source text.
+**Returns:** `str` — UZON source text.
 
 **Examples:**
 
@@ -1043,7 +1061,7 @@ except uzon.UzonSyntaxError as e:
 class UzonTypeError(UzonError)
 ```
 
-Type annotation and compatibility errors — type mismatches in `as`, `with`, `extends`, branch type mismatch in `if`/`case`, or operations between incompatible types.
+Type annotation and compatibility errors — type mismatches in `as`, `with`, `plus`, branch type mismatch in `if`/`case`, or operations between incompatible types.
 
 ```python
 try:
