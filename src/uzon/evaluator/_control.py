@@ -166,11 +166,7 @@ class ControlMixin:
                     node.line, node.col, file=self._filename,
                 )
         elif case_kind == "type":
-            if not isinstance(scrutinee, UzonUnion):
-                raise UzonTypeError(
-                    "'case type' requires an untagged union scrutinee",
-                    node.line, node.col, file=self._filename,
-                )
+            pass  # §5.10: case type works on any value
 
         result = None
         matched_idx: int | None = None
@@ -211,7 +207,8 @@ class ControlMixin:
                     matched_idx = i
             elif case_kind == "type":
                 type_name = clause.value.name
-                if self._value_matches_type(scrutinee.value, type_name):
+                check_val = scrutinee.value if isinstance(scrutinee, UzonUnion) else scrutinee
+                if self._value_matches_type(check_val, type_name):
                     result = self._eval_node(clause.result, scope, exclude)
                     matched_idx = i
             else:
