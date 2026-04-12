@@ -137,6 +137,9 @@ class StructMixin:
         override_scope = self._augment_scope_with_types(scope, base)
         overrides: dict[str, Any] = {}
 
+        # §3.2.1: Lookup named type field definitions for null-priority rule
+        named_fields = self._get_named_type_fields(base)
+
         for field in node.overrides.fields:
             name = field.name
             if name not in base:
@@ -150,7 +153,10 @@ class StructMixin:
                     f"'with' override: field '{name}' cannot be undefined",
                     field.line, field.col, file=self._filename,
                 )
-            value = self._check_override_compat(base[name], value, name, "with", field)
+            value = self._check_override_compat(
+                base[name], value, name, "with", field,
+                named_type_original=named_fields.get(name),
+            )
             overrides[name] = value
 
         if isinstance(base, UzonStruct) and base.type_name:
@@ -196,6 +202,8 @@ class StructMixin:
         overrides: dict[str, Any] = {}
         additions: dict[str, Any] = {}
 
+        named_fields = self._get_named_type_fields(base)
+
         for field in node.extensions.fields:
             name = field.name
             is_existing = name in base
@@ -206,7 +214,10 @@ class StructMixin:
                     field.line, field.col, file=self._filename,
                 )
             if is_existing:
-                value = self._check_override_compat(base[name], value, name, "plus", field)
+                value = self._check_override_compat(
+                    base[name], value, name, "plus", field,
+                    named_type_original=named_fields.get(name),
+                )
                 overrides[name] = value
             else:
                 additions[name] = value
@@ -229,6 +240,23 @@ class StructMixin:
         return result
 
     # ── shared struct helpers ────────────────────────────────────────
+
+    def _get_named_type_fields(self, base: dict) -> dict[str, Any]:
+        """Return the named type's original field values, or empty dict."""
+        type_name = None
+        if isinstance(base, UzonStruct) and base.type_name:
+            type_name = base.type_name
+        else:
+            type_name = self._called_of.get(id(base))
+        if not type_name:
+            return {}
+        base_scope = self._scope_of.get(id(base))
+        if not base_scope:
+            return {}
+        type_info = base_scope.get_type(type_name)
+        if type_info and isinstance(type_info, dict):
+            return type_info.get("field_values", {})
+        return {}
 
     def _augment_scope_with_types(self, scope: Scope, base: dict) -> Scope:
         """Create a scope augmented with the base struct's type definitions."""
@@ -259,25 +287,37 @@ class StructMixin:
         return self._eval_node(field.value, scope, exclude)
 
     def _check_override_compat(
-        self, original: Any, value: Any, field_name: str, context: str, field: Node
+        self, original: Any, value: Any, field_name: str, context: str, field: Node,
+        *, named_type_original: Any = None,
     ) -> Any:
-        """Check type compatibility for struct field override, with adoptable coercion."""
-        if original is not None and value is not None:
-            if not self._same_uzon_type(original, value):
+        """Check type compatibility for struct field override, with adoptable coercion.
+
+        *named_type_original* is the field value from the named type definition
+        (§3.2.1).  When the current field is null but the named type defines a
+        concrete type, the named type takes priority.
+        """
+        # §3.2.1: When field is null but named type defines a concrete type,
+        # use the named type's original value for type checking.
+        effective = original
+        if effective is None and named_type_original is not None:
+            effective = named_type_original
+
+        if effective is not None and value is not None:
+            if not self._same_uzon_type(effective, value):
                 raise UzonTypeError(
                     f"'{context}' override: field '{field_name}' type mismatch — "
-                    f"original is {self._type_name(original)}, override is {self._type_name(value)}",
+                    f"original is {self._type_name(effective)}, override is {self._type_name(value)}",
                     field.line, field.col, file=self._filename,
                 )
-            if (isinstance(original, UzonInt) and isinstance(value, UzonInt)
-                    and value.adoptable and original.type_name != value.type_name):
-                m = INT_TYPE_RE.match(original.type_name)
+            if (isinstance(effective, UzonInt) and isinstance(value, UzonInt)
+                    and value.adoptable and effective.type_name != value.type_name):
+                m = INT_TYPE_RE.match(effective.type_name)
                 if m:
-                    self._check_int_range(int(value), m.group(1), int(m.group(2)), original.type_name, field)
-                value = UzonInt(int(value), original.type_name)
-            elif (isinstance(original, UzonFloat) and isinstance(value, UzonFloat)
-                    and value.adoptable and original.type_name != value.type_name):
-                value = UzonFloat(float(value), original.type_name)
+                    self._check_int_range(int(value), m.group(1), int(m.group(2)), effective.type_name, field)
+                value = UzonInt(int(value), effective.type_name)
+            elif (isinstance(effective, UzonFloat) and isinstance(value, UzonFloat)
+                    and value.adoptable and effective.type_name != value.type_name):
+                value = UzonFloat(float(value), effective.type_name)
         return value
 
     # ── file import (§7) ─────────────────────────────────────────────
