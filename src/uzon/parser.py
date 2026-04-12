@@ -539,19 +539,18 @@ class Parser:
             self._skip_nl_if_cont()
         return node
 
+    @staticmethod
+    def _is_non_callable(node: Node) -> bool:
+        """Struct and list literals are never callable; a trailing '(' would
+        incorrectly consume the next expression."""
+        return isinstance(node, (StructLiteral, ListLiteral))
+
     def _parse_call_or_access(self) -> Node:
         """§9 call_or_access: primary {'.' member | '(' args ')'}."""
         node = self._parse_primary()
-        crossed_nl = self._peek_type() == TokenType.NEWLINE
         self._skip_nl_if_cont()
         while True:
             tt = self._peek_type()
-            # §8: LPAREN after a newline is a new expression, not a call
-            # continuation — unless the node is callable (identifier / member).
-            if tt == TokenType.LPAREN and crossed_nl and not isinstance(node, (Identifier, MemberAccess)):
-                break
-            if tt not in (TokenType.DOT, TokenType.LPAREN):
-                break
             if tt == TokenType.DOT:
                 self._advance()
                 tok = self._peek()
@@ -560,7 +559,7 @@ class Parser:
                     node = MemberAccess(object=node, member=tok.value, line=tok.line, col=tok.col)
                 else:
                     raise self._error(f"Expected member name after '.', got {tok.type.name}")
-            else:
+            elif tt == TokenType.LPAREN and not self._is_non_callable(node):
                 tok = self._advance()  # (
                 self._skip_nl()
                 args: list[Node] = []
@@ -576,7 +575,8 @@ class Parser:
                         self._skip_nl()
                 self._expect(TokenType.RPAREN)
                 node = FunctionCall(callee=node, args=args, line=tok.line, col=tok.col)
-            crossed_nl = self._peek_type() == TokenType.NEWLINE
+            else:
+                break
             self._skip_nl_if_cont()
         return node
 
