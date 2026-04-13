@@ -366,6 +366,50 @@ class TypeChecksMixin:
                         f"List elements must be same type, got {self._type_name(first)} and {self._type_name(other)}",
                         node.line, node.col, file=self._filename,
                     )
+            # §3.4 + §3.2.1: Anonymous struct elements must share field shapes
+            if isinstance(first, dict) and not (
+                (isinstance(first, UzonStruct) and first.type_name)
+                or self._called_of.get(id(first))
+            ):
+                self._check_struct_list_shape(non_null, node)
+
+    def _check_struct_list_shape(self, elements: list[dict], node: Node) -> None:
+        """§3.4: Anonymous struct list elements must have same keys and value type categories."""
+        first = elements[0]
+        first_keys = first.keys()
+        for other in elements[1:]:
+            if other.keys() != first_keys:
+                raise UzonTypeError(
+                    "List elements must be same type, got struct and struct",
+                    node.line, node.col, file=self._filename,
+                )
+            for k in first_keys:
+                va, vb = first[k], other[k]
+                if va is not None and vb is not None:
+                    if self._type_category(va) != self._type_category(vb):
+                        raise UzonTypeError(
+                            "List elements must be same type, got struct and struct",
+                            node.line, node.col, file=self._filename,
+                        )
+
+    @staticmethod
+    def _type_category(value: Any) -> str:
+        """Return coarse type category for struct field value comparison."""
+        if isinstance(value, bool):
+            return "bool"
+        if isinstance(value, int):
+            return "int"
+        if isinstance(value, float):
+            return "float"
+        if isinstance(value, str):
+            return "string"
+        if isinstance(value, dict):
+            return "struct"
+        if isinstance(value, list):
+            return "list"
+        if isinstance(value, tuple):
+            return "tuple"
+        return type(value).__name__
 
     def _require_same_type(self, left: Any, right: Any, op: str, node: Node) -> None:
         if not self._same_uzon_type(left, right):
