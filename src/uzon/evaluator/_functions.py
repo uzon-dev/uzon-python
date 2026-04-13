@@ -30,10 +30,15 @@ class FunctionMixin:
         params: list[tuple[str, str, Any]] = []
         for param in node.params:
             type_name = param.type.name
+            # §6.2: Validate parameter type exists in scope at definition time
+            self._validate_type_name(param.type, node, scope)
             default = None
             if param.default is not None:
                 default = self._eval_node(param.default, scope, exclude)
             params.append((param.name, type_name, default))
+
+        # §6.2: Validate return type exists in scope at definition time
+        self._validate_type_name(node.return_type, node, scope)
 
         return UzonFunction(
             params=params,

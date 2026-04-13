@@ -245,6 +245,10 @@ class TypeChecksMixin:
             if type_expr.inner:
                 self._validate_type_name(type_expr.inner, node, scope)
             return
+        if type_expr.is_tuple:
+            for elem in type_expr.elements:
+                self._validate_type_name(elem, node, scope)
+            return
         if INT_TYPE_RE.match(name) or name in FLOAT_TYPES or name in SIMPLE_TYPES:
             return
         if self._resolve_named_type(type_expr, scope, node) is None:
