@@ -107,7 +107,7 @@ def load(source: str | Path, *, plain: bool = False) -> dict[str, Any]:
         UzonError: On failure. The ``errors`` attribute contains all
             individual errors when multiple problems are detected.
     """
-    path = Path(source)
+    path = Path(source).resolve()  # realpath for consistent import detection
     text = path.read_text(encoding="utf-8")
     tokens = Lexer(text).tokenize()
     doc = Parser(tokens).parse()

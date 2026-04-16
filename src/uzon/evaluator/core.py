@@ -59,9 +59,16 @@ class Evaluator(
 
     def evaluate(self, doc: Document) -> dict[str, Any]:
         """§3: Evaluate a Document AST into a Python dict."""
+        # Push entry file to import stack for circular import detection
+        if self._filename != "<string>":
+            self._import_stack.append(self._filename)
         scope = Scope()
         scope.define("std", self._build_std())
-        self._evaluate_bindings(doc.bindings, scope)
+        try:
+            self._evaluate_bindings(doc.bindings, scope)
+        finally:
+            if self._filename != "<string>" and self._import_stack:
+                self._import_stack.pop()
         result = scope.to_dict()
         result.pop("std", None)
         return result
@@ -93,33 +100,65 @@ class Evaluator(
 
         had_errors = False
 
-        # §3.8: Static recursion check — collect, don't raise
+        # §3.8: Function call DAG check — detect direct and mutual recursion
         fn_cycle_names: set[str] = set()
-        for b in bindings:
-            if isinstance(b, Binding) and isinstance(b.value, FunctionExpr):
-                body_refs: set[str] = set()
+        func_bindings = {
+            b.name: b for b in bindings
+            if isinstance(b, Binding) and isinstance(b.value, FunctionExpr)
+        }
+        if func_bindings:
+            # Build call graph among functions
+            call_graph: dict[str, set[str]] = {}
+            for name, b in func_bindings.items():
+                refs: set[str] = set()
                 for body_b in b.value.body_bindings:
-                    self._collect_bare_refs(body_b.value, body_refs)
-                self._collect_bare_refs(b.value.body_expr, body_refs)
-                if b.name in body_refs:
-                    fn_cycle_names.add(b.name)
-                    self._collected_errors.append(UzonCircularError(
-                        "Recursive function call detected — call graph must be a DAG",
-                        b.line, b.col, file=self._filename,
-                    ))
-                    had_errors = True
+                    self._collect_bare_refs(body_b.value, refs)
+                self._collect_bare_refs(b.value.body_expr, refs)
+                call_graph[name] = refs & set(func_bindings.keys())
+
+            # DFS cycle detection (0=white, 1=gray, 2=black)
+            color: dict[str, int] = {n: 0 for n in func_bindings}
+
+            def _dfs(node: str) -> bool:
+                color[node] = 1
+                for neighbor in call_graph.get(node, set()):
+                    if color.get(neighbor, 0) == 1:
+                        return True
+                    if color.get(neighbor, 0) == 0 and _dfs(neighbor):
+                        return True
+                color[node] = 2
+                return False
+
+            for fname in func_bindings:
+                if color[fname] == 0:
+                    if _dfs(fname):
+                        for n, c in color.items():
+                            if c == 1:
+                                fn_cycle_names.add(n)
+                                color[n] = 2
+
+            for name in fn_cycle_names:
+                b = func_bindings[name]
+                self._collected_errors.append(UzonCircularError(
+                    "Recursive function call detected — call graph must be a DAG",
+                    b.line, b.col, file=self._filename,
+                ))
+                had_errors = True
 
         deps = self._build_dependencies(bindings)
         order, cycle_groups = self._topological_sort(bindings, deps)
 
-        # Collect cycle errors per component
+        # Collect cycle errors per binding (excluding already-reported fn cycles)
         by_name = {b.name: b for b in bindings}
         for comp in cycle_groups:
-            first = by_name[comp[0]]
-            self._collected_errors.append(UzonCircularError(
-                f"Circular dependency among: {', '.join(comp)}",
-                first.line, first.col, file=self._filename,
-            ))
+            for name in comp:
+                if name in fn_cycle_names:
+                    continue
+                b = by_name[name]
+                self._collected_errors.append(UzonCircularError(
+                    f"Circular dependency among: {', '.join(comp)}",
+                    b.line, b.col, file=self._filename,
+                ))
             had_errors = True
 
         # Evaluate non-cycle bindings, skipping function cycle participants
