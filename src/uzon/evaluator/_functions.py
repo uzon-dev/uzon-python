@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..ast_nodes import FunctionCall, FunctionExpr, Node
-from ..errors import UzonRuntimeError, UzonTypeError
+from ..errors import UzonCircularError, UzonRuntimeError, UzonTypeError
 from ..scope import Scope
 from ..types import (
     UzonBuiltinFunction, UzonEnum, UzonFloat, UzonFunction, UzonInt, UzonTaggedUnion,
@@ -78,7 +78,7 @@ class FunctionMixin:
 
         func_id = id(callee)
         if func_id in self._call_stack:
-            raise UzonTypeError(
+            raise UzonCircularError(
                 "Recursive function call detected — call graph must be a DAG",
                 node.line, node.col, file=self._filename,
             )
@@ -117,7 +117,7 @@ class FunctionMixin:
         """Apply a UzonFunction to arguments (used by std.map/filter/reduce/sort)."""
         func_id = id(func)
         if func_id in self._call_stack:
-            raise UzonTypeError(
+            raise UzonCircularError(
                 "Recursive function call detected — call graph must be a DAG",
                 node.line, node.col, file=self._filename,
             )

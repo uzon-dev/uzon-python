@@ -20,7 +20,7 @@ from ..ast_nodes import (
     StructLiteral, StructExtension, StructOverride, TupleLiteral,
     TypeAnnotation, UnaryOp, UndefinedLiteral,
 )
-from ..errors import UzonRuntimeError, UzonSyntaxError, UzonTypeError
+from ..errors import UzonCircularError, UzonRuntimeError, UzonSyntaxError, UzonTypeError
 from ..scope import Scope
 from ..types import UzonFloat, UzonInt, UzonUndefined
 from ._constants import I64_MIN, I64_MAX, SPECULATIVE_FAILED
@@ -98,7 +98,7 @@ class Evaluator(
                     self._collect_bare_refs(body_b.value, body_refs)
                 self._collect_bare_refs(b.value.body_expr, body_refs)
                 if b.name in body_refs:
-                    raise UzonTypeError(
+                    raise UzonCircularError(
                         "Recursive function call detected — call graph must be a DAG",
                         b.line, b.col, file=self._filename,
                     )
