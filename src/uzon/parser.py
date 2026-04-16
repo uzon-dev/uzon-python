@@ -192,6 +192,7 @@ class Parser:
 
     def _parse_is_binding(self, name: str, line: int, col: int) -> Binding:
         """§9 is_binding: 'is' ('of' member_access | expression) ['called' name]."""
+        self._skip_nl_if_cont()
         if self._peek_type() == TokenType.OF:
             self._advance()
             source = self._parse_member_access()
