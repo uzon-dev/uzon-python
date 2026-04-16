@@ -593,13 +593,13 @@ class TestStdLibrary:
         r = evaluate('x is std.len("hello")')
         assert r["x"] == 5
 
-    def test_std_has_list(self):
-        r = evaluate("x is [1, 2, 3] as [i64]\ny is std.has(x, 2)")
+    def test_std_hasKey_struct(self):
+        r = evaluate('x is { a is 1 }\ny is std.hasKey(x, "a")')
         assert r["y"] is True
 
-    def test_std_has_struct(self):
-        r = evaluate('x is { a is 1 }\ny is std.has(x, "a")')
-        assert r["y"] is True
+    def test_std_hasKey_missing(self):
+        r = evaluate('x is { a is 1 }\ny is std.hasKey(x, "b")')
+        assert r["y"] is False
 
     def test_std_get_list(self):
         r = evaluate("x is [10, 20, 30] as [i64]\ny is std.get(x, 1)")

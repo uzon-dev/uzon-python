@@ -24,7 +24,7 @@ class StdlibMixin:
         """§5.16: Build the std library as a struct of built-in functions."""
         return {
             "len": UzonBuiltinFunction("len", self._std_len, 1, 1),
-            "has": UzonBuiltinFunction("has", self._std_has, 2, 2),
+            "hasKey": UzonBuiltinFunction("hasKey", self._std_hasKey, 2, 2),
             "get": UzonBuiltinFunction("get", self._std_get, 2, 2),
             "keys": UzonBuiltinFunction("keys", self._std_keys, 1, 1),
             "values": UzonBuiltinFunction("values", self._std_values, 1, 1),
@@ -54,28 +54,19 @@ class StdlibMixin:
             node.line, node.col, file=self._filename,
         )
 
-    def _std_has(self, args: list, node: Node) -> bool:
-        collection, key = args[0], args[1]
-        if isinstance(collection, list):
-            if collection:
-                if not self._same_uzon_type(collection[0], key):
-                    raise UzonTypeError(
-                        f"std.has: key type {self._type_name(key)} does not match "
-                        f"element type {self._type_name(collection[0])}",
-                        node.line, node.col, file=self._filename,
-                    )
-            return key in collection
-        if isinstance(collection, dict):
-            if not isinstance(key, str):
-                raise UzonTypeError(
-                    "std.has: struct key must be a string",
-                    node.line, node.col, file=self._filename,
-                )
-            return key in collection
-        raise UzonTypeError(
-            f"std.has expects a list or struct, got {self._type_name(collection)}",
-            node.line, node.col, file=self._filename,
-        )
+    def _std_hasKey(self, args: list, node: Node) -> bool:
+        struct, key = args[0], args[1]
+        if not isinstance(struct, dict):
+            raise UzonTypeError(
+                f"std.hasKey expects a struct, got {self._type_name(struct)}",
+                node.line, node.col, file=self._filename,
+            )
+        if not isinstance(key, str):
+            raise UzonTypeError(
+                "std.hasKey: key must be a string",
+                node.line, node.col, file=self._filename,
+            )
+        return key in struct
 
     def _std_get(self, args: list, node: Node) -> Any:
         collection, key = args[0], args[1]
