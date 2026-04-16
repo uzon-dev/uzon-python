@@ -114,11 +114,49 @@ class DependencyMixin:
 
         if len(order) != len(bindings):
             remaining = [b.name for b in bindings if b.name not in set(order)]
+            components = self._find_cycle_groups(remaining, deps)
+            if len(components) == 1:
+                msg = f"Circular dependency among: {', '.join(components[0])}"
+            else:
+                parts = [f"Circular dependency among: {', '.join(c)}" for c in components]
+                msg = "\n".join(parts)
             raise UzonCircularError(
-                f"Circular dependency among: {', '.join(remaining)}",
+                msg,
                 by_name[remaining[0]].line,
                 by_name[remaining[0]].col,
                 file=self._filename,
             )
 
         return [by_name[name] for name in order]
+
+    @staticmethod
+    def _find_cycle_groups(
+        remaining: list[str], deps: dict[str, set[str]]
+    ) -> list[list[str]]:
+        """Find connected components among remaining (cyclic) nodes."""
+        remaining_set = set(remaining)
+        adj: dict[str, set[str]] = {n: set() for n in remaining}
+        for n in remaining:
+            for dep in deps.get(n, set()):
+                if dep in remaining_set:
+                    adj[n].add(dep)
+                    adj[dep].add(n)
+
+        visited: set[str] = set()
+        components: list[list[str]] = []
+        for name in remaining:
+            if name in visited:
+                continue
+            component: list[str] = []
+            stack = [name]
+            while stack:
+                node = stack.pop()
+                if node in visited:
+                    continue
+                visited.add(node)
+                component.append(node)
+                for neighbor in adj[node]:
+                    if neighbor not in visited:
+                        stack.append(neighbor)
+            components.append(component)
+        return components
