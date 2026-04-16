@@ -20,6 +20,7 @@ class UzonError(Exception):
         self.line = line
         self.col = col
         self.file = file
+        self.errors: list[UzonError] = []
         parts: list[str] = []
         if file is not None and file != "<string>":
             parts.append(f"File {file}")

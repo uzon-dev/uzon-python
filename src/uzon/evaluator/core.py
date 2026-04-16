@@ -55,6 +55,7 @@ class Evaluator(
         self._scope_of: dict[int, Scope] = {}   # id(result_dict) → Scope
         self._called_of: dict[int, str] = {}    # id(result_dict) → type_name (§6.2)
         self._call_stack: list[int] = []  # §3.8: recursion detection
+        self._collected_errors: list = []  # multi-error collection
 
     def evaluate(self, doc: Document) -> dict[str, Any]:
         """§3: Evaluate a Document AST into a Python dict."""
@@ -90,7 +91,10 @@ class Evaluator(
                 primary_bindings.append(b)
         bindings = primary_bindings
 
-        # §3.8: Static recursion check — function bodies must not call themselves
+        had_errors = False
+
+        # §3.8: Static recursion check — collect, don't raise
+        fn_cycle_names: set[str] = set()
         for b in bindings:
             if isinstance(b, Binding) and isinstance(b.value, FunctionExpr):
                 body_refs: set[str] = set()
@@ -98,21 +102,55 @@ class Evaluator(
                     self._collect_bare_refs(body_b.value, body_refs)
                 self._collect_bare_refs(b.value.body_expr, body_refs)
                 if b.name in body_refs:
-                    raise UzonCircularError(
+                    fn_cycle_names.add(b.name)
+                    self._collected_errors.append(UzonCircularError(
                         "Recursive function call detected — call graph must be a DAG",
                         b.line, b.col, file=self._filename,
-                    )
+                    ))
+                    had_errors = True
 
         deps = self._build_dependencies(bindings)
-        order = self._topological_sort(bindings, deps)
+        order, cycle_groups = self._topological_sort(bindings, deps)
 
+        # Collect cycle errors per component
+        by_name = {b.name: b for b in bindings}
+        for comp in cycle_groups:
+            first = by_name[comp[0]]
+            self._collected_errors.append(UzonCircularError(
+                f"Circular dependency among: {', '.join(comp)}",
+                first.line, first.col, file=self._filename,
+            ))
+            had_errors = True
+
+        # Evaluate non-cycle bindings, skipping function cycle participants
         for b in order:
-            value = self._eval_binding(b, scope, struct_context=struct_context)
-            scope.define(b.name, value)
+            if b.name in fn_cycle_names:
+                continue
+            pre_count = len(self._collected_errors)
+            try:
+                value = self._eval_binding(b, scope, struct_context=struct_context)
+                scope.define(b.name, value)
+            except UzonCircularError as e:
+                if len(self._collected_errors) == pre_count:
+                    self._collected_errors.append(e)
+                had_errors = True
+                continue
 
         for b in override_bindings:
-            value = self._eval_binding(b, scope, struct_context=struct_context)
-            scope.define(b.name, value)
+            pre_count = len(self._collected_errors)
+            try:
+                value = self._eval_binding(b, scope, struct_context=struct_context)
+                scope.define(b.name, value)
+            except UzonCircularError as e:
+                if len(self._collected_errors) == pre_count:
+                    self._collected_errors.append(e)
+                had_errors = True
+                continue
+
+        if had_errors:
+            last = self._collected_errors[-1]
+            last.errors = list(self._collected_errors)
+            raise last
 
     def _eval_binding(
         self, b: Binding | AreBinding, scope: Scope,

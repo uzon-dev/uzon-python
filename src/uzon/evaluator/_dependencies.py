@@ -15,8 +15,6 @@ from ..ast_nodes import (
     AreBinding, Binding, FunctionExpr,
     Identifier, Node,
 )
-from ..errors import UzonCircularError
-
 
 class DependencyMixin:
     """Dependency graph and topological sort methods mixed into the Evaluator."""
@@ -90,8 +88,13 @@ class DependencyMixin:
         self,
         bindings: list[Binding | AreBinding],
         deps: dict[str, set[str]],
-    ) -> list[Binding | AreBinding]:
-        """Kahn's algorithm. Raises UzonCircularError on cycles."""
+    ) -> tuple[list[Binding | AreBinding], list[list[str]]]:
+        """Kahn's algorithm. Returns (order, cycle_groups).
+
+        ``order`` contains non-cycle bindings in evaluation order.
+        ``cycle_groups`` is a list of connected components among cycle
+        participants (empty when there are no cycles).
+        """
         by_name: dict[str, Binding | AreBinding] = {b.name: b for b in bindings}
         in_degree: dict[str, int] = {b.name: len(deps.get(b.name, set())) for b in bindings}
 
@@ -112,22 +115,12 @@ class DependencyMixin:
                 if in_degree[dependent] == 0:
                     queue.append(dependent)
 
+        cycle_groups: list[list[str]] = []
         if len(order) != len(bindings):
             remaining = [b.name for b in bindings if b.name not in set(order)]
-            components = self._find_cycle_groups(remaining, deps)
-            if len(components) == 1:
-                msg = f"Circular dependency among: {', '.join(components[0])}"
-            else:
-                parts = [f"Circular dependency among: {', '.join(c)}" for c in components]
-                msg = "\n".join(parts)
-            raise UzonCircularError(
-                msg,
-                by_name[remaining[0]].line,
-                by_name[remaining[0]].col,
-                file=self._filename,
-            )
+            cycle_groups = self._find_cycle_groups(remaining, deps)
 
-        return [by_name[name] for name in order]
+        return [by_name[name] for name in order], cycle_groups
 
     @staticmethod
     def _find_cycle_groups(

@@ -333,7 +333,7 @@ class StructMixin:
             base_dir = os.path.dirname(os.path.abspath(self._filename))
         if "." not in os.path.basename(raw_path):
             raw_path = raw_path + ".uzon"
-        resolved = os.path.normpath(os.path.join(base_dir, raw_path))
+        resolved = os.path.realpath(os.path.join(base_dir, raw_path))
 
         if resolved in self._import_stack:
             raise UzonCircularError(
@@ -351,6 +351,8 @@ class StructMixin:
         with open(resolved, encoding="utf-8") as f:
             source = f.read()
 
+        saved_collected = self._collected_errors
+        self._collected_errors = []
         self._import_stack.append(resolved)
         old_filename = self._filename
         self._filename = resolved
@@ -378,6 +380,7 @@ class StructMixin:
         finally:
             self._filename = old_filename
             self._import_stack.pop()
+            self._collected_errors = saved_collected
 
         self._import_cache[resolved] = result
         return result

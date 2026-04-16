@@ -61,10 +61,20 @@ def loads(text: str, *, plain: bool = False) -> dict[str, Any]:
 
     Returns:
         A dict of evaluated bindings.
+
+    Raises:
+        UzonError: On failure. The ``errors`` attribute contains all
+            individual errors when multiple problems are detected.
     """
     tokens = Lexer(text).tokenize()
     doc = Parser(tokens).parse()
-    result = Evaluator().evaluate(doc)
+    evaluator = Evaluator()
+    try:
+        result = evaluator.evaluate(doc)
+    except UzonError as e:
+        if evaluator._collected_errors and not e.errors:
+            e.errors = list(evaluator._collected_errors)
+        raise
     if plain:
         return _to_plain(result)
     return result
@@ -92,12 +102,22 @@ def load(source: str | Path, *, plain: bool = False) -> dict[str, Any]:
 
     Returns:
         A dict of evaluated bindings.
+
+    Raises:
+        UzonError: On failure. The ``errors`` attribute contains all
+            individual errors when multiple problems are detected.
     """
     path = Path(source)
     text = path.read_text(encoding="utf-8")
     tokens = Lexer(text).tokenize()
     doc = Parser(tokens).parse()
-    result = Evaluator(filename=str(path)).evaluate(doc)
+    evaluator = Evaluator(filename=str(path))
+    try:
+        result = evaluator.evaluate(doc)
+    except UzonError as e:
+        if evaluator._collected_errors and not e.errors:
+            e.errors = list(evaluator._collected_errors)
+        raise
     if plain:
         return _to_plain(result)
     return result
