@@ -237,19 +237,14 @@ class OperatorMixin:
                 return False
             left = left.value
             right = right.value
-        elif left_is_union or right_is_union:
-            raise UzonTypeError(
-                f"Cannot compare union with {self._type_name(right if left_is_union else left)} "
-                f"using 'is'",
-                node.line, node.col, file=self._filename,
-            )
+        elif left_is_union:
+            left = left.value
+        elif right_is_union:
+            right = right.value
         if left is None or right is None:
             return left is None and right is None
         if left is UzonUndefined or right is UzonUndefined:
-            raise UzonTypeError(
-                "Cannot compare with undefined — use 'or else' to provide a fallback",
-                node.line, node.col, file=self._filename,
-            )
+            return left is UzonUndefined and right is UzonUndefined
         # §4.3: NaN is never equal to anything
         if isinstance(left, float) and left != left:
             return False

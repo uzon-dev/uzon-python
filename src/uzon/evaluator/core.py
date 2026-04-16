@@ -124,7 +124,7 @@ class Evaluator(
 
         # §3.1: undefined is not a literal — cannot be assigned directly.
         if isinstance(b.value, UndefinedLiteral):
-            raise UzonRuntimeError(
+            raise UzonTypeError(
                 f"Cannot assign literal 'undefined' to '{b.name}'",
                 b.value.line, b.value.col, file=self._filename,
             )
