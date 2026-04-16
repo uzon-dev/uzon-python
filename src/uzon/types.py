@@ -132,7 +132,7 @@ def _int_range(type_name: str) -> tuple[int, int] | None:
         return None
     signed, width = m.group(1) == 'i', int(m.group(2))
     if width == 0:
-        return (0, -1)  # empty range — no value fits
+        return (0, 0)  # unit type — only 0 fits
     if signed:
         return -(1 << (width - 1)), (1 << (width - 1)) - 1
     return 0, (1 << width) - 1
