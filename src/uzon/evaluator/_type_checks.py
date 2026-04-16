@@ -479,6 +479,12 @@ class TypeChecksMixin:
             if a.type_name and b.type_name:
                 return a.type_name == b.type_name
             return a.signature() == b.signature()
+        if isinstance(a, UzonUnion) and isinstance(b, UzonUnion):
+            if a.type_name and b.type_name:
+                return a.type_name == b.type_name
+            if a.type_name or b.type_name:
+                return False
+            return set(a.types) == set(b.types)
         return type(a) is type(b)
 
     def _type_name(self, val: Any) -> str:

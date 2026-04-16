@@ -223,10 +223,26 @@ class OperatorMixin:
                 "Cannot compare function values with 'is' / 'is not'",
                 node.line, node.col, file=self._filename,
             )
-        if isinstance(left, UzonUnion):
+        # §5.2: Untagged union comparison rules
+        left_is_union = isinstance(left, UzonUnion)
+        right_is_union = isinstance(right, UzonUnion)
+        if left_is_union and right_is_union:
+            if left.type_name != right.type_name:
+                raise UzonTypeError(
+                    f"Cannot compare different union types: "
+                    f"{left.type_name or 'anonymous'} vs {right.type_name or 'anonymous'}",
+                    node.line, node.col, file=self._filename,
+                )
+            if not self._same_uzon_type(left.value, right.value):
+                return False
             left = left.value
-        if isinstance(right, UzonUnion):
             right = right.value
+        elif left_is_union or right_is_union:
+            raise UzonTypeError(
+                f"Cannot compare union with {self._type_name(right if left_is_union else left)} "
+                f"using 'is'",
+                node.line, node.col, file=self._filename,
+            )
         if left is None or right is None:
             return left is None and right is None
         if left is UzonUndefined or right is UzonUndefined:
@@ -421,6 +437,16 @@ class OperatorMixin:
 
     def _eval_comparison(self, op: str, left: Any, right: Any, node: Node) -> bool:
         """§5.4: Evaluate comparison operators."""
+        if isinstance(left, UzonUnion) or isinstance(right, UzonUnion):
+            raise UzonTypeError(
+                f"Cannot use '{op}' with untagged union",
+                node.line, node.col, file=self._filename,
+            )
+        if isinstance(left, (UzonFunction, UzonBuiltinFunction)) or isinstance(right, (UzonFunction, UzonBuiltinFunction)):
+            raise UzonTypeError(
+                f"Cannot use '{op}' with function",
+                node.line, node.col, file=self._filename,
+            )
         if left is None or right is None:
             raise UzonTypeError(
                 f"Cannot use '{op}' with null", node.line, node.col,
