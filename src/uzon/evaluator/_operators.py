@@ -246,7 +246,10 @@ class OperatorMixin:
         if left is None or right is None:
             return left is None and right is None
         if left is UzonUndefined or right is UzonUndefined:
-            return left is UzonUndefined and right is UzonUndefined
+            raise UzonTypeError(
+                "Cannot compare with undefined — use 'or else' to provide a fallback",
+                node.line, node.col, file=self._filename,
+            )
         # §4.3: NaN is never equal to anything
         if isinstance(left, float) and left != left:
             return False
