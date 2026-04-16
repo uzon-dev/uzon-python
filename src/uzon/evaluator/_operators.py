@@ -452,12 +452,20 @@ class OperatorMixin:
         return val
 
     def _eval_in(self, left: Any, right: Any, node: Node) -> bool:
-        """§5.8: Evaluate `in` membership operator."""
-        if not isinstance(right, list):
-            raise UzonTypeError(
-                f"'in' requires a list on the right, got {self._type_name(right)}",
-                node.line, node.col, file=self._filename,
-            )
+        """§5.8: Evaluate `in` membership operator (list, tuple, struct)."""
+        if isinstance(right, list):
+            return self._eval_in_list(left, right, node)
+        if isinstance(right, tuple):
+            return self._eval_in_tuple(left, right, node)
+        if isinstance(right, dict):
+            return self._eval_in_struct(left, right, node)
+        raise UzonTypeError(
+            f"'in' requires a list, tuple, or struct on the right, got {self._type_name(right)}",
+            node.line, node.col, file=self._filename,
+        )
+
+    def _eval_in_list(self, left: Any, right: list, node: Node) -> bool:
+        """§5.8: `in` on list — type-checked membership."""
         if left is not None and right:
             representative = next((e for e in right if e is not None), None)
             if representative is not None:
@@ -468,6 +476,36 @@ class OperatorMixin:
                         node.line, node.col, file=self._filename,
                     )
         return left in right
+
+    def _eval_in_tuple(self, left: Any, right: tuple, node: Node) -> bool:
+        """§5.8: `in` on tuple — heterogeneous, skip type-mismatched elements."""
+        for elem in right:
+            if elem is UzonUndefined:
+                continue
+            if elem is None or left is None:
+                if left is None and elem is None:
+                    return True
+                continue
+            if not self._same_uzon_type(left, elem):
+                continue
+            if left == elem:
+                return True
+        return False
+
+    def _eval_in_struct(self, left: Any, right: dict, node: Node) -> bool:
+        """§5.8: `in` on struct — value membership (not key)."""
+        for val in right.values():
+            if val is UzonUndefined:
+                continue
+            if val is None or left is None:
+                if left is None and val is None:
+                    return True
+                continue
+            if not self._same_uzon_type(left, val):
+                continue
+            if left == val:
+                return True
+        return False
 
     def _eval_concat(self, left: Any, right: Any, node: Node) -> Any:
         """§5.8.2: Evaluate `++` concatenation operator."""
