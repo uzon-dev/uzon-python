@@ -82,6 +82,35 @@ class DependencyMixin:
             elif isinstance(attr, Node):
                 self._collect_bare_refs(attr, refs)
 
+    @staticmethod
+    def _find_ref_location(node: Node, names: set[str]) -> tuple[int, int] | None:
+        """Find the source location of the first reference to any name in *names*."""
+        if isinstance(node, Identifier) and node.name in names:
+            return (node.line, node.col)
+        if isinstance(node, FunctionExpr):
+            for param in node.params:
+                if param.default is not None:
+                    loc = DependencyMixin._find_ref_location(param.default, names)
+                    if loc:
+                        return loc
+            for binding in node.body_bindings:
+                loc = DependencyMixin._find_ref_location(binding.value, names)
+                if loc:
+                    return loc
+            return DependencyMixin._find_ref_location(node.body_expr, names)
+        for attr in vars(node).values():
+            if isinstance(attr, list):
+                for item in attr:
+                    if isinstance(item, Node):
+                        loc = DependencyMixin._find_ref_location(item, names)
+                        if loc:
+                            return loc
+            elif isinstance(attr, Node):
+                loc = DependencyMixin._find_ref_location(attr, names)
+                if loc:
+                    return loc
+        return None
+
     # ── topological sort ──────────────────────────────────────────────
 
     def _topological_sort(

@@ -139,9 +139,14 @@ class Evaluator(
 
             for name in fn_cycle_names:
                 b = func_bindings[name]
+                # Report at the call site, not the definition site
+                other = fn_cycle_names - {name}
+                loc = self._find_ref_location(b.value, other | {name})
+                err_line = loc[0] if loc else b.line
+                err_col = loc[1] if loc else b.col
                 self._collected_errors.append(UzonCircularError(
                     "Recursive function call detected — call graph must be a DAG",
-                    b.line, b.col, file=self._filename,
+                    err_line, err_col, file=self._filename,
                 ))
                 had_errors = True
 
