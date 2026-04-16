@@ -39,7 +39,13 @@ class TypeChecksMixin:
         type_name = type_expr.name
         m = INT_TYPE_RE.match(type_name)
         if m:
-            self._check_type_assertion_int(value, type_name, m.group(1), int(m.group(2)), node)
+            bits = int(m.group(2))
+            if bits > 65535:
+                raise UzonTypeError(
+                    f"Integer type width {bits} exceeds maximum (65535)",
+                    node.line, node.col, file=self._filename,
+                )
+            self._check_type_assertion_int(value, type_name, m.group(1), bits, node)
             return
         if type_name in FLOAT_TYPES:
             self._check_type_assertion_float(value, type_name, node)
@@ -249,7 +255,15 @@ class TypeChecksMixin:
             for elem in type_expr.elements:
                 self._validate_type_name(elem, node, scope)
             return
-        if INT_TYPE_RE.match(name) or name in FLOAT_TYPES or name in SIMPLE_TYPES:
+        m = INT_TYPE_RE.match(name)
+        if m:
+            if int(m.group(2)) > 65535:
+                raise UzonTypeError(
+                    f"Integer type width {m.group(2)} exceeds maximum (65535)",
+                    node.line, node.col, file=self._filename,
+                )
+            return
+        if name in FLOAT_TYPES or name in SIMPLE_TYPES:
             return
         if self._resolve_named_type(type_expr, scope, node) is None:
             raise UzonTypeError(
