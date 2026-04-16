@@ -485,6 +485,10 @@ class ControlMixin:
             )
         type_name = node.right.name
         # §5.2: For unions (tagged or untagged), check inner value's type
-        check_val = left.value if isinstance(left, (UzonUnion, UzonTaggedUnion)) else left
-        result = self._value_matches_type(check_val, type_name)
+        if isinstance(left, (UzonUnion, UzonTaggedUnion)):
+            check_val = left.value
+            result = self._value_matches_type(check_val, type_name)
+        else:
+            # §5.2: is type on non-union checks concrete type
+            result = self._value_matches_type_strict(left, type_name)
         return result if op == "is type" else not result

@@ -198,6 +198,36 @@ class FunctionMixin:
             return self._normalize_type_name(value.type_name) == expected
         return False
 
+    def _value_matches_type_strict(self, value: Any, type_name: str) -> bool:
+        """Check if a value matches a type name using concrete types only.
+
+        Unlike _value_matches_type, adoptable literals match only their
+        default type (i64/f64), not any integer/float type.
+        """
+        expected = self._normalize_type_name(type_name)
+        actual = self._type_name(value)
+        if expected == actual:
+            return True
+        # Adoptable literals: match only their default type (e.g. i64, f64)
+        if isinstance(value, UzonInt) and value.adoptable:
+            return expected == value.type_name
+        if isinstance(value, UzonFloat) and value.adoptable:
+            return expected == value.type_name
+        if expected.startswith("[") and expected.endswith("]") and isinstance(value, list):
+            elem_type = expected[1:-1]
+            return all(self._value_matches_type_strict(e, elem_type) for e in value)
+        if expected.startswith("(") and expected.endswith(")") and isinstance(value, tuple):
+            inner = expected[1:-1]
+            type_parts = [t.strip() for t in inner.split(",")]
+            if len(type_parts) != len(value):
+                return False
+            return all(self._value_matches_type_strict(v, t) for v, t in zip(value, type_parts))
+        if isinstance(value, UzonTaggedUnion) and value.type_name:
+            return self._normalize_type_name(value.type_name) == expected
+        if isinstance(value, UzonEnum) and value.type_name:
+            return self._normalize_type_name(value.type_name) == expected
+        return False
+
     def _check_param_type(self, value: Any, type_name: str, param_name: str, node: Node) -> None:
         if self._value_matches_type(value, type_name):
             return
