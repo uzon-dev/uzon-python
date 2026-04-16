@@ -755,8 +755,8 @@ class Parser:
                 nt = self._expect(TokenType.IDENTIFIER)
                 val: Node = Identifier(name=nt.value, line=nt.line, col=nt.col)
             elif case_kind == "type":
-                nt = self._expect_type_name()
-                val = Identifier(name=nt.value, line=nt.line, col=nt.col)
+                type_expr = self._parse_type_expr()
+                val = Identifier(name=type_expr.name, line=type_expr.line, col=type_expr.col)
             else:
                 val = self._parse_expression()
             self._expect(TokenType.THEN)

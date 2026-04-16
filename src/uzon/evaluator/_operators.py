@@ -227,7 +227,7 @@ class OperatorMixin:
         left_is_union = isinstance(left, UzonUnion)
         right_is_union = isinstance(right, UzonUnion)
         if left_is_union and right_is_union:
-            if left.type_name != right.type_name:
+            if not self._same_uzon_type(left, right):
                 raise UzonTypeError(
                     f"Cannot compare different union types: "
                     f"{left.type_name or 'anonymous'} vs {right.type_name or 'anonymous'}",
