@@ -41,6 +41,12 @@ class StdlibMixin:
             "trim": UzonBuiltinFunction("trim", self._std_trim, 1, 1),
             "lower": UzonBuiltinFunction("lower", self._std_lower, 1, 1),
             "upper": UzonBuiltinFunction("upper", self._std_upper, 1, 1),
+            "reverse": UzonBuiltinFunction("reverse", self._std_reverse, 1, 1),
+            "all": UzonBuiltinFunction("all", self._std_all, 2, 2),
+            "any": UzonBuiltinFunction("any", self._std_any, 2, 2),
+            "contains": UzonBuiltinFunction("contains", self._std_contains, 2, 2),
+            "startsWith": UzonBuiltinFunction("startsWith", self._std_startsWith, 2, 2),
+            "endsWith": UzonBuiltinFunction("endsWith", self._std_endsWith, 2, 2),
         }
 
     # ── collection functions ─────────────────────────────────────────
@@ -323,3 +329,106 @@ class StdlibMixin:
                 node.line, node.col, file=self._filename,
             )
         return s.upper()
+
+    # ── new collection functions (§5.16) ────────────────────────────
+
+    def _std_reverse(self, args: list, node: Node) -> Any:
+        val = args[0]
+        if isinstance(val, list):
+            return val[::-1]
+        if isinstance(val, str):
+            return val[::-1]
+        raise UzonTypeError(
+            f"std.reverse expects a list or string, got {self._type_name(val)}",
+            node.line, node.col, file=self._filename,
+        )
+
+    def _std_all(self, args: list, node: Node) -> bool:
+        lst, func = args[0], args[1]
+        if not isinstance(lst, list):
+            raise UzonTypeError(
+                f"std.all expects a list, got {self._type_name(lst)}",
+                node.line, node.col, file=self._filename,
+            )
+        if not isinstance(func, UzonFunction):
+            raise UzonTypeError(
+                "std.all expects a function as second argument",
+                node.line, node.col, file=self._filename,
+            )
+        for elem in lst:
+            val = self._apply_function(func, [elem], node)
+            if not isinstance(val, bool):
+                raise UzonTypeError(
+                    "std.all predicate must return bool",
+                    node.line, node.col, file=self._filename,
+                )
+            if not val:
+                return False
+        return True
+
+    def _std_any(self, args: list, node: Node) -> bool:
+        lst, func = args[0], args[1]
+        if not isinstance(lst, list):
+            raise UzonTypeError(
+                f"std.any expects a list, got {self._type_name(lst)}",
+                node.line, node.col, file=self._filename,
+            )
+        if not isinstance(func, UzonFunction):
+            raise UzonTypeError(
+                "std.any expects a function as second argument",
+                node.line, node.col, file=self._filename,
+            )
+        for elem in lst:
+            val = self._apply_function(func, [elem], node)
+            if not isinstance(val, bool):
+                raise UzonTypeError(
+                    "std.any predicate must return bool",
+                    node.line, node.col, file=self._filename,
+                )
+            if val:
+                return True
+        return False
+
+    # ── new string functions (§5.16) ────────────────────────────────
+
+    def _std_contains(self, args: list, node: Node) -> bool:
+        s, sub = args[0], args[1]
+        if not isinstance(s, str):
+            raise UzonTypeError(
+                f"std.contains expects a string, got {self._type_name(s)}",
+                node.line, node.col, file=self._filename,
+            )
+        if not isinstance(sub, str):
+            raise UzonTypeError(
+                f"std.contains substring must be a string, got {self._type_name(sub)}",
+                node.line, node.col, file=self._filename,
+            )
+        return sub in s
+
+    def _std_startsWith(self, args: list, node: Node) -> bool:
+        s, prefix = args[0], args[1]
+        if not isinstance(s, str):
+            raise UzonTypeError(
+                f"std.startsWith expects a string, got {self._type_name(s)}",
+                node.line, node.col, file=self._filename,
+            )
+        if not isinstance(prefix, str):
+            raise UzonTypeError(
+                f"std.startsWith prefix must be a string, got {self._type_name(prefix)}",
+                node.line, node.col, file=self._filename,
+            )
+        return s.startswith(prefix)
+
+    def _std_endsWith(self, args: list, node: Node) -> bool:
+        s, suffix = args[0], args[1]
+        if not isinstance(s, str):
+            raise UzonTypeError(
+                f"std.endsWith expects a string, got {self._type_name(s)}",
+                node.line, node.col, file=self._filename,
+            )
+        if not isinstance(suffix, str):
+            raise UzonTypeError(
+                f"std.endsWith suffix must be a string, got {self._type_name(suffix)}",
+                node.line, node.col, file=self._filename,
+            )
+        return s.endswith(suffix)
