@@ -77,7 +77,7 @@ class StdlibMixin:
     def _std_get(self, args: list, node: Node) -> Any:
         collection, key = args[0], args[1]
         if isinstance(collection, list):
-            if not isinstance(key, int):
+            if not isinstance(key, int) or isinstance(key, bool):
                 raise UzonTypeError(
                     "std.get: list index must be an integer",
                     node.line, node.col, file=self._filename,
@@ -88,7 +88,7 @@ class StdlibMixin:
                 return collection[idx]
             return UzonUndefined
         if isinstance(collection, tuple):
-            if not isinstance(key, int):
+            if not isinstance(key, int) or isinstance(key, bool):
                 raise UzonTypeError(
                     "std.get: tuple index must be an integer",
                     node.line, node.col, file=self._filename,
@@ -310,7 +310,7 @@ class StdlibMixin:
                 f"std.trim expects a string, got {self._type_name(s)}",
                 node.line, node.col, file=self._filename,
             )
-        return s.strip()
+        return s.strip(" \t\n\r")
 
     def _std_lower(self, args: list, node: Node) -> str:
         s = args[0]
