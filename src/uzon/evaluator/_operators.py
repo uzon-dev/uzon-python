@@ -477,6 +477,11 @@ class OperatorMixin:
 
     def _eval_in(self, left: Any, right: Any, node: Node) -> bool:
         """§5.8: Evaluate `in` membership operator (list, tuple, struct)."""
+        if isinstance(left, (UzonFunction, UzonBuiltinFunction)):
+            raise UzonTypeError(
+                "Cannot use 'in' with function values",
+                node.line, node.col, file=self._filename,
+            )
         if isinstance(right, list):
             return self._eval_in_list(left, right, node)
         if isinstance(right, tuple):
