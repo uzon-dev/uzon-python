@@ -121,6 +121,15 @@ class OperatorMixin:
             return not self._eval_is(left, right, node)
 
         # Everything else errors on undefined — report at the undefined operand
+        if left is UzonUndefined and right is UzonUndefined:
+            self._collected_errors.append(UzonRuntimeError(
+                f"Cannot use '{op}' with undefined — use 'or else' to provide a fallback",
+                node.left.line, node.left.col, file=self._filename,
+            ))
+            raise UzonRuntimeError(
+                f"Cannot use '{op}' with undefined — use 'or else' to provide a fallback",
+                node.right.line, node.right.col, file=self._filename,
+            )
         if left is UzonUndefined:
             raise UzonRuntimeError(
                 f"Cannot use '{op}' with undefined — use 'or else' to provide a fallback",
