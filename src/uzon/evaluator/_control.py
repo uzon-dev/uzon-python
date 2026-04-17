@@ -192,7 +192,7 @@ class ControlMixin:
 
         for i, clause in enumerate(node.when_clauses):
             # Validation runs for all clauses (even after a match)
-            if case_kind == "value" and isinstance(clause.value, UndefinedLiteral):
+            if isinstance(clause.value, UndefinedLiteral):
                 raise UzonTypeError(
                     "'when undefined' is not allowed",
                     clause.value.line, clause.value.col,
