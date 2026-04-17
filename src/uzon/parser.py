@@ -801,6 +801,9 @@ class Parser:
                 self._expect(TokenType.COMMA)
                 self._skip_nl()
             p = self._parse_function_param()
+            for existing in params:
+                if existing.name == p.name:
+                    raise self._error(f"Duplicate parameter name '{p.name}'")
             if p.default is not None:
                 has_default = True
             elif has_default:
