@@ -160,7 +160,7 @@ class ControlMixin:
         if scrutinee is UzonUndefined:
             raise UzonRuntimeError(
                 "Cannot use 'case' on undefined — check with 'is undefined' first",
-                node.line, node.col, file=self._filename,
+                node.scrutinee.line, node.scrutinee.col, file=self._filename,
             )
 
         # Determine case kind from when clauses (all share the same kind per parser)
@@ -448,7 +448,7 @@ class ControlMixin:
         if left is UzonUndefined:
             raise UzonRuntimeError(
                 "'is named' requires a tagged union, got undefined",
-                node.line, node.col, file=self._filename,
+                node.left.line, node.left.col, file=self._filename,
             )
         if not isinstance(left, UzonTaggedUnion):
             raise UzonTypeError(
@@ -476,7 +476,7 @@ class ControlMixin:
         if left is UzonUndefined:
             raise UzonRuntimeError(
                 "'is type' requires a value, got undefined",
-                node.line, node.col, file=self._filename,
+                node.left.line, node.left.col, file=self._filename,
             )
         if not isinstance(node.right, Identifier):
             raise UzonRuntimeError(

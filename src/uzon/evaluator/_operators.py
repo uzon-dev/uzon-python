@@ -43,10 +43,10 @@ class OperatorMixin:
             file=self._filename,
         )
 
-    def _eval_unary_minus(self, operand: Any, node: Node) -> Any:
+    def _eval_unary_minus(self, operand: Any, node: UnaryOp) -> Any:
         if operand is UzonUndefined:
             raise UzonRuntimeError(
-                "Cannot negate undefined", node.line, node.col,
+                "Cannot negate undefined", node.operand.line, node.operand.col,
                 file=self._filename,
             )
         operand = self._unwrap_transparent(operand)
@@ -71,10 +71,10 @@ class OperatorMixin:
                 )
         return result
 
-    def _eval_unary_not(self, operand: Any, node: Node) -> bool:
+    def _eval_unary_not(self, operand: Any, node: UnaryOp) -> bool:
         if operand is UzonUndefined:
             raise UzonRuntimeError(
-                "Cannot apply 'not' to undefined", node.line, node.col,
+                "Cannot apply 'not' to undefined", node.operand.line, node.operand.col,
                 file=self._filename,
             )
         operand = self._unwrap_transparent(operand)
@@ -120,11 +120,16 @@ class OperatorMixin:
         if op == "is not":
             return not self._eval_is(left, right, node)
 
-        # Everything else errors on undefined
-        if left is UzonUndefined or right is UzonUndefined:
+        # Everything else errors on undefined — report at the undefined operand
+        if left is UzonUndefined:
             raise UzonRuntimeError(
                 f"Cannot use '{op}' with undefined — use 'or else' to provide a fallback",
-                node.line, node.col, file=self._filename,
+                node.left.line, node.left.col, file=self._filename,
+            )
+        if right is UzonUndefined:
+            raise UzonRuntimeError(
+                f"Cannot use '{op}' with undefined — use 'or else' to provide a fallback",
+                node.right.line, node.right.col, file=self._filename,
             )
 
         # §3.7.1: Transparent tagged union unwrapping
@@ -163,28 +168,28 @@ class OperatorMixin:
 
     def _eval_and(self, node: BinaryOp, scope, exclude: str | None) -> bool:
         left = self._unwrap_transparent(self._eval_node(node.left, scope, exclude))
-        self._require_bool(left, "and", node)
+        self._require_bool(left, "and", node.left)
         if not left:
             right_spec = self._speculative_eval(node.right, scope, exclude)
             if right_spec is not SPECULATIVE_FAILED:
                 right_spec = self._unwrap_transparent(right_spec)
-                self._require_bool(right_spec, "and", node)
+                self._require_bool(right_spec, "and", node.right)
             return False
         right = self._unwrap_transparent(self._eval_node(node.right, scope, exclude))
-        self._require_bool(right, "and", node)
+        self._require_bool(right, "and", node.right)
         return right
 
     def _eval_or(self, node: BinaryOp, scope, exclude: str | None) -> bool:
         left = self._unwrap_transparent(self._eval_node(node.left, scope, exclude))
-        self._require_bool(left, "or", node)
+        self._require_bool(left, "or", node.left)
         if left:
             right_spec = self._speculative_eval(node.right, scope, exclude)
             if right_spec is not SPECULATIVE_FAILED:
                 right_spec = self._unwrap_transparent(right_spec)
-                self._require_bool(right_spec, "or", node)
+                self._require_bool(right_spec, "or", node.right)
             return True
         right = self._unwrap_transparent(self._eval_node(node.right, scope, exclude))
-        self._require_bool(right, "or", node)
+        self._require_bool(right, "or", node.right)
         return right
 
     # ── `in` operator ────────────────────────────────────────────────
@@ -195,7 +200,7 @@ class OperatorMixin:
         if right is UzonUndefined:
             raise UzonRuntimeError(
                 "Cannot use 'in' with undefined — use 'or else' to provide a fallback",
-                node.line, node.col, file=self._filename,
+                node.right.line, node.right.col, file=self._filename,
             )
         if (isinstance(node.left, Identifier) and isinstance(right, list) and right
                 and isinstance(right[0], UzonEnum)):
@@ -210,7 +215,7 @@ class OperatorMixin:
         if left is UzonUndefined:
             raise UzonRuntimeError(
                 "Cannot use 'in' with undefined — use 'or else' to provide a fallback",
-                node.line, node.col, file=self._filename,
+                node.left.line, node.left.col, file=self._filename,
             )
         return self._eval_in(left, right, node)
 

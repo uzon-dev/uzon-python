@@ -118,7 +118,7 @@ class StructMixin:
         if base is UzonUndefined:
             raise UzonRuntimeError(
                 "'with' requires a concrete struct, got undefined",
-                node.line, node.col, file=self._filename,
+                node.base.line, node.base.col, file=self._filename,
             )
         if isinstance(base, UzonTaggedUnion):
             raise UzonTypeError(
@@ -183,7 +183,7 @@ class StructMixin:
         if base is UzonUndefined:
             raise UzonRuntimeError(
                 "'plus' requires a concrete struct, got undefined",
-                node.line, node.col, file=self._filename,
+                node.base.line, node.base.col, file=self._filename,
             )
         if isinstance(base, UzonTaggedUnion):
             raise UzonTypeError(
