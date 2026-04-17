@@ -110,9 +110,40 @@ class OperatorMixin:
         if op == "in":
             return self._eval_in_op(node, scope, exclude)
 
-        # Evaluate both sides
-        left = self._eval_node(node.left, scope, exclude)
-        right = self._eval_node(node.right, scope, exclude)
+        # Evaluate both sides — catch left-side errors so right is still evaluated
+        left_err = None
+        try:
+            left = self._eval_node(node.left, scope, exclude)
+        except (UzonRuntimeError, UzonTypeError) as e:
+            left = UzonUndefined
+            left_err = e
+
+        right_err = None
+        try:
+            right = self._eval_node(node.right, scope, exclude)
+        except (UzonRuntimeError, UzonTypeError) as e:
+            right = UzonUndefined
+            right_err = e
+
+        # If any sub-expression raised, collect all errors and re-raise
+        if left_err or right_err:
+            errs = []
+            if left_err:
+                errs.append(left_err)
+            elif left is UzonUndefined and op not in ("is", "is not"):
+                errs.append(UzonRuntimeError(
+                    f"Cannot use '{op}' with undefined — use 'or else' to provide a fallback",
+                    node.left.line, node.left.col, file=self._filename,
+                ))
+            if right_err:
+                errs.append(right_err)
+            elif right is UzonUndefined and op not in ("is", "is not"):
+                errs.append(UzonRuntimeError(
+                    f"Cannot use '{op}' with undefined — use 'or else' to provide a fallback",
+                    node.right.line, node.right.col, file=self._filename,
+                ))
+            self._collected_errors.extend(errs[:-1])
+            raise errs[-1]
 
         # §5.2: Equality — allows undefined and null
         if op == "is":
