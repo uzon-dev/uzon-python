@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from ..ast_nodes import Conversion, EnvRef, IntegerLiteral, MemberAccess, Node, TypeExpr
+from ..ast_nodes import Conversion, IntegerLiteral, Node, TypeExpr
 from ..errors import UzonRuntimeError, UzonTypeError
 from ..scope import Scope
 from ..types import (
@@ -35,9 +35,26 @@ class TypeConversionMixin:
         else:
             value = self._eval_node(node.expr, scope, exclude)
 
-        # §5.11: undefined propagates, but conversion must be valid for source type
+        target = node.type.name
+
+        # §5.11.0: bool and null are identity-only — type check before undefined propagation
+        if target == "bool":
+            if isinstance(value, bool):
+                return value
+            raise UzonTypeError(
+                f"Cannot convert {self._type_name(value)} to bool",
+                node.line, node.col, file=self._filename,
+            )
+        if target == "null":
+            if value is None:
+                return value
+            raise UzonTypeError(
+                f"Cannot convert {self._type_name(value)} to null",
+                node.line, node.col, file=self._filename,
+            )
+
+        # §5.11: undefined propagates for all other types
         if value is UzonUndefined:
-            self._validate_conversion_type(node)
             return UzonUndefined
 
         # §5.11.0: tagged/untagged unions can only convert to string
@@ -53,22 +70,6 @@ class TypeConversionMixin:
             return self._value_to_string(value, node)
 
         return self._convert_value(value, node.type, node, scope)
-
-    def _validate_conversion_type(self, node: Conversion) -> None:
-        """Validate `to` target against known source type even when value is undefined."""
-        expr = node.expr
-        if isinstance(expr, MemberAccess) and isinstance(expr.object, EnvRef):
-            target = node.type.name
-            if target == "bool":
-                raise UzonTypeError(
-                    "Cannot convert string to bool",
-                    node.line, node.col, file=self._filename,
-                )
-            if target == "null":
-                raise UzonTypeError(
-                    "Cannot convert string to null",
-                    node.line, node.col, file=self._filename,
-                )
 
     # ── conversion dispatch ───────────────────────────────────────────
 
