@@ -408,7 +408,15 @@ class Evaluator(
         if isinstance(node, OrElse):
             left = self._eval_node(node.left, scope, exclude)
             if left is UzonUndefined:
-                return self._eval_node(node.right, scope, exclude)
+                right = self._eval_node(node.right, scope, exclude)
+                # §5.7: branches must be type-compatible even when left is
+                # undefined. Use the static type hint from the left AST (e.g.,
+                # the target of a ``to`` conversion or ``as`` annotation) as a
+                # proxy for what the left value's type would have been.
+                left_hint = self._static_type_hint(node.left, scope)
+                if left_hint is not None and right is not None and right is not UzonUndefined:
+                    self._check_branch_type_compat([left_hint, right], node)
+                return right
             right_spec = self._speculative_eval(node.right, scope, exclude)
             if right_spec is not SPECULATIVE_FAILED:
                 self._check_branch_type_compat([left, right_spec], node)
@@ -475,6 +483,26 @@ class Evaluator(
             f"Evaluation not yet implemented for {type(node).__name__}",
             node.line, node.col, file=self._filename,
         )
+
+    # ── static type inference for branch compatibility ────────────────
+
+    def _static_type_hint(self, node: Node, scope: Scope) -> Any:
+        """Produce a proxy value that carries the static type of ``node``.
+
+        Used by ``or else`` to enforce §5.7 branch type compatibility even
+        when the left side evaluates to undefined. Returns ``None`` if no
+        static type is derivable.
+        """
+        from ..ast_nodes import (
+            Conversion as _Conversion,
+            TypeAnnotation as _TypeAnnotation,
+        )
+        if isinstance(node, (_Conversion, _TypeAnnotation)):
+            try:
+                return self._default_for_type(node.type, scope, node)
+            except (UzonTypeError, UzonRuntimeError):
+                return None
+        return None
 
     # ── recursive type detection (§6.4) ───────────────────────────────
 
