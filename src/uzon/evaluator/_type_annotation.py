@@ -120,7 +120,7 @@ class TypeAnnotationMixin:
                         ))
                     else:
                         elements.append(self._eval_node(elem, scope, exclude))
-                return elements
+                return UzonTypedList(elements, inner_type_info["name"])
 
         # Bypass i64 range check when target is a wider integer type
         if INT_TYPE_RE.match(node.type.name) and isinstance(node.expr, IntegerLiteral):

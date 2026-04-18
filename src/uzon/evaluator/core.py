@@ -236,16 +236,18 @@ class Evaluator(
 
         value = self._eval_node(b.value, scope, exclude=b.name)
 
-        # §6.1: Empty list requires type annotation (relaxed inside struct literals)
-        if not struct_context and isinstance(value, list) and len(value) == 0:
+        # §6.1: Empty list requires type annotation — applies equally inside
+        # struct literals per §3.2 line 337 ("struct field's type follows the
+        # same rules as any binding").
+        if isinstance(value, list) and len(value) == 0:
             if not isinstance(b.value, (TypeAnnotation, IfExpr, CaseExpr, OrElse, FunctionCall, BinaryOp)):
                 raise UzonTypeError(
                     "Empty list requires explicit type annotation: [] as [Type]",
                     b.value.line, b.value.col, file=self._filename,
                 )
 
-        # All-null list requires type annotation (relaxed inside struct literals)
-        if (not struct_context and isinstance(value, list) and value
+        # All-null list requires type annotation
+        if (isinstance(value, list) and value
                 and not isinstance(b.value, TypeAnnotation)
                 and all(e is None for e in value)):
             raise UzonTypeError(
