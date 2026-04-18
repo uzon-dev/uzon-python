@@ -15,6 +15,7 @@ from .ast_nodes import (
     FunctionCall, FunctionExpr, FunctionParam, Grouping, Identifier,
     IfExpr, InfLiteral, IntegerLiteral, ListLiteral, MemberAccess,
     NamedVariant, NanLiteral, Node, NullLiteral, OrElse,
+    StandaloneEnum, StandaloneStruct, StandaloneTaggedUnion, StandaloneUnion,
     StringLiteral, StructExtension, StructImport, StructLiteral,
     StructOverride, TupleLiteral, TypeAnnotation, TypeExpr, UnaryOp,
     UndefinedLiteral, WhenClause,
@@ -266,6 +267,7 @@ class Parser:
             if self._peek_type() != TokenType.OR:
                 break
             tok = self._advance()
+            self._skip_nl_if_cont()
             left = BinaryOp(op="or", left=left, right=self._parse_and(), line=tok.line, col=tok.col)
         return left
 
@@ -277,6 +279,7 @@ class Parser:
             if self._peek_type() != TokenType.AND:
                 break
             tok = self._advance()
+            self._skip_nl_if_cont()
             left = BinaryOp(op="and", left=left, right=self._parse_not(), line=tok.line, col=tok.col)
         return left
 
@@ -369,6 +372,7 @@ class Parser:
             if self._peek_type() not in (TokenType.PLUS, TokenType.MINUS):
                 break
             tok = self._advance()
+            self._skip_nl_if_cont()
             left = BinaryOp(op=tok.value, left=left, right=self._parse_multiplication(),
                             line=tok.line, col=tok.col)
         return left
@@ -382,6 +386,7 @@ class Parser:
                                          TokenType.PERCENT, TokenType.STAR_STAR):
                 break
             tok = self._advance()
+            self._skip_nl_if_cont()
             left = BinaryOp(op=tok.value, left=left, right=self._parse_unary(),
                             line=tok.line, col=tok.col)
         return left
@@ -406,13 +411,27 @@ class Parser:
     # ── postfix chain ─────────────────────────────────────────────────
 
     def _parse_type_decl(self) -> Node:
-        """§9 type_decl = type_annot_level [from_clause | named_clause]."""
+        """§9 type_decl = type_annot_level [from_clause | named_clause].
+
+        Accepts both orders for tagged-union reuse:
+          - ``value as Type named tag`` (canonical, per §3.7 example)
+          - ``value named tag as Type`` (equivalent — normalized by folding
+            the trailing ``as Type`` into the NamedVariant's value).
+        """
         node = self._parse_type_annot()
         self._skip_nl_if_cont()
         if self._peek_type() == TokenType.FROM:
             return self._parse_from_clause(node)
         if self._peek_type() == TokenType.NAMED:
-            return self._parse_named_clause(node)
+            node = self._parse_named_clause(node)
+            self._skip_nl_if_cont()
+            if self._peek_type() == TokenType.AS and isinstance(node, NamedVariant):
+                tok = self._advance()
+                te = self._parse_type_expr()
+                node.value = TypeAnnotation(
+                    expr=node.value, type=te, line=tok.line, col=tok.col,
+                )
+            return node
         return node
 
     def _parse_from_clause(self, value: Node) -> Node:
@@ -633,7 +652,13 @@ class Parser:
         if tok.type == TokenType.CASE:
             return self._parse_case_expr()
         if tok.type == TokenType.STRUCT:
-            return self._parse_struct_import()
+            return self._parse_struct_keyword()
+        if tok.type == TokenType.ENUM:
+            return self._parse_enum_decl()
+        if tok.type == TokenType.UNION:
+            return self._parse_union_decl()
+        if tok.type == TokenType.TAGGED:
+            return self._parse_tagged_union_decl()
         if tok.type == TokenType.FUNCTION:
             return self._parse_function_expr()
 
@@ -772,13 +797,32 @@ class Parser:
         return CaseExpr(scrutinee=scrutinee, when_clauses=whens, else_branch=else_,
                         line=tok.line, col=tok.col)
 
-    def _parse_struct_import(self) -> Node:
-        """§7.1: struct \"path\" — file import. Interpolated paths rejected."""
+    def _parse_struct_keyword(self) -> Node:
+        """§9 struct_expr: ``struct`` (string | struct_literal).
+
+        Dispatch by next token (per §3.2, §7.1):
+          - STRING → file import (§7.1)
+          - LBRACE → standalone struct type declaration (§3.2)
+        """
         tok = self._expect(TokenType.STRUCT)
+        nxt = self._peek_type()
+        if nxt == TokenType.STRING:
+            return self._parse_struct_import_tail(tok)
+        if nxt == TokenType.LBRACE:
+            struct_lit = self._parse_struct_literal()
+            return StandaloneStruct(struct=struct_lit, line=tok.line, col=tok.col)
+        raise self._error(
+            f"Expected string (file import) or '{{' (struct type), got {self._peek().type.name}"
+        )
+
+    def _parse_struct_import_tail(self, struct_tok: Token) -> Node:
+        """§7.1: struct \"path\" — file import. Interpolated paths rejected."""
         path_tok = self._expect(TokenType.STRING)
         if self._peek_type() == TokenType.INTERP_START:
             raise self._error("Struct import path cannot contain interpolation")
-        node: Node = StructImport(path=path_tok.value, line=tok.line, col=tok.col)
+        node: Node = StructImport(
+            path=path_tok.value, line=struct_tok.line, col=struct_tok.col
+        )
         while self._peek_type() == TokenType.DOT:
             self._advance()
             mt = self._peek()
@@ -788,6 +832,56 @@ class Parser:
             else:
                 raise self._error(f"Expected member name after '.', got {mt.type.name}")
         return node
+
+    # ── standalone type declarations (§3.5, §3.6, §3.7) ──────────────
+
+    def _parse_enum_decl(self) -> StandaloneEnum:
+        """§3.5 / §9 enum_decl: ``enum`` variant_name, variant_name, ... (min 2)."""
+        tok = self._expect(TokenType.ENUM)
+        variants = [self._parse_variant_name()]
+        while self._peek_type() == TokenType.COMMA:
+            if self._is_binding_start_at(self._pos + 1):
+                break
+            self._advance()
+            self._skip_nl()
+            variants.append(self._parse_variant_name())
+        return StandaloneEnum(variants=variants, line=tok.line, col=tok.col)
+
+    def _parse_union_decl(self) -> StandaloneUnion:
+        """§3.6 / §9 union_decl: ``union`` type_expr, type_expr, ... (min 2)."""
+        tok = self._expect(TokenType.UNION)
+        types = [self._parse_type_expr()]
+        while self._peek_type() == TokenType.COMMA:
+            if self._is_binding_start_at(self._pos + 1):
+                break
+            self._advance()
+            self._skip_nl()
+            types.append(self._parse_type_expr())
+        return StandaloneUnion(types=types, line=tok.line, col=tok.col)
+
+    def _parse_tagged_union_decl(self) -> StandaloneTaggedUnion:
+        """§3.7 / §9 tagged_union_decl: ``tagged union`` v as T, v as T, ... (min 2)."""
+        tok = self._expect(TokenType.TAGGED)
+        if self._peek_type() != TokenType.UNION:
+            raise self._error(
+                f"Expected 'union' after 'tagged', got {self._peek().type.name}"
+            )
+        self._advance()  # union
+        variants: list[tuple[str, TypeExpr]] = []
+        vn = self._parse_variant_name()
+        self._expect(TokenType.AS)
+        vt = self._parse_type_expr()
+        variants.append((vn, vt))
+        while self._peek_type() == TokenType.COMMA:
+            if self._is_binding_start_at(self._pos + 1):
+                break
+            self._advance()
+            self._skip_nl()
+            vn = self._parse_variant_name()
+            self._expect(TokenType.AS)
+            vt = self._parse_type_expr()
+            variants.append((vn, vt))
+        return StandaloneTaggedUnion(variants=variants, line=tok.line, col=tok.col)
 
     # ── functions (§3.8) ──────────────────────────────────────────────
 

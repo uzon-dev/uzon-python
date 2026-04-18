@@ -190,6 +190,29 @@ class FieldExtraction(Node):
     source: Node = field(default_factory=Node)
 
 
+# ── Standalone type declarations (§3.2, §3.5, §3.6, §3.7) ─────────
+
+@dataclass
+class StandaloneStruct(Node):
+    """§3.2: ``struct { ... }`` — named struct type. Binding name → type name."""
+    struct: StructLiteral = None  # type: ignore[assignment]
+
+@dataclass
+class StandaloneEnum(Node):
+    """§3.5: ``enum v1, v2, ...`` — named enum type. Binding name → type name."""
+    variants: list[str] = field(default_factory=list)
+
+@dataclass
+class StandaloneUnion(Node):
+    """§3.6: ``union T1, T2, ...`` — named union type. Binding name → type name."""
+    types: list[TypeExpr] = field(default_factory=list)
+
+@dataclass
+class StandaloneTaggedUnion(Node):
+    """§3.7: ``tagged union v1 as T1, v2 as T2, ...`` — named tagged union type."""
+    variants: list[tuple[str, TypeExpr]] = field(default_factory=list)
+
+
 # ── Compounds (§3.2, §3.3, §3.4) ──────────────────────────────────
 
 @dataclass

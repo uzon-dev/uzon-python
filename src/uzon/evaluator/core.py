@@ -16,13 +16,18 @@ from ..ast_nodes import (
     Document, EnvRef, FieldExtraction, FloatLiteral, FromEnum, FromUnion,
     FunctionCall, FunctionExpr, Grouping, Identifier, IfExpr, InfLiteral,
     IntegerLiteral, ListLiteral, MemberAccess, NamedVariant, NanLiteral,
-    Node, NullLiteral, OrElse, StringLiteral, StructImport,
+    Node, NullLiteral, OrElse,
+    StandaloneEnum, StandaloneStruct, StandaloneTaggedUnion, StandaloneUnion,
+    StringLiteral, StructImport,
     StructLiteral, StructExtension, StructOverride, TupleLiteral,
     TypeAnnotation, UnaryOp, UndefinedLiteral,
 )
 from ..errors import UzonCircularError, UzonRuntimeError, UzonSyntaxError, UzonTypeError
 from ..scope import Scope
-from ..types import UzonFloat, UzonInt, UzonUndefined
+from ..types import (
+    UzonEnum, UzonFloat, UzonInt, UzonStruct, UzonTaggedUnion,
+    UzonTypedList, UzonUndefined, UzonUnion,
+)
 from ._constants import I64_MIN, I64_MAX, SPECULATIVE_FAILED
 from ._control import ControlMixin
 from ._dependencies import DependencyMixin
@@ -210,6 +215,18 @@ class Evaluator(
                 f"Cannot assign literal 'undefined' to '{b.name}'",
                 b.value.line, b.value.col, file=self._filename,
             )
+
+        # §3.2/§3.5/§3.6/§3.7: Standalone type declaration — the binding name
+        # becomes the type name. Mixing with ``called`` is a syntax error.
+        if isinstance(b.value, (StandaloneStruct, StandaloneEnum,
+                                StandaloneUnion, StandaloneTaggedUnion)):
+            if b.called is not None:
+                raise UzonSyntaxError(
+                    "Standalone type declaration cannot be combined with 'called'",
+                    b.value.line, b.value.col, file=self._filename,
+                )
+            value = self._eval_standalone_decl(b.value, scope)
+            return self._register_called(b.name, value, b, scope)
 
         value = self._eval_node(b.value, scope, exclude=b.name)
 
@@ -427,6 +444,14 @@ class Evaluator(
         if isinstance(node, NamedVariant):
             return self._eval_named_variant(node, scope, exclude)
 
+        # §3.2/§3.5/§3.6/§3.7: Standalone type declarations (anonymous fallback).
+        # At a binding position, _eval_binding intercepts these and applies the
+        # binding name as the type name. When nested, we still produce a value
+        # but leave the type name unset.
+        if isinstance(node, (StandaloneStruct, StandaloneEnum,
+                             StandaloneUnion, StandaloneTaggedUnion)):
+            return self._eval_standalone_decl(node, scope)
+
         # §3.8: Function expression
         if isinstance(node, FunctionExpr):
             return self._eval_function_expr(node, scope, exclude)
@@ -442,5 +467,149 @@ class Evaluator(
 
         raise UzonRuntimeError(
             f"Evaluation not yet implemented for {type(node).__name__}",
+            node.line, node.col, file=self._filename,
+        )
+
+    # ── standalone type declarations (§3.2 / §3.5 / §3.6 / §3.7) ─────
+
+    def _eval_standalone_decl(self, node: Node, scope: Scope) -> Any:
+        """§3.2/§3.5/§3.6/§3.7: Evaluate a standalone type declaration.
+
+        Returns the default value per the spec's default value tables. When
+        invoked from _eval_binding, the caller wraps the result with
+        _register_called using the binding name so the binding name becomes
+        the type name. When invoked from _eval_node at a nested position,
+        the type remains anonymous.
+        """
+        if isinstance(node, StandaloneStruct):
+            return self._eval_struct_literal(node.struct, scope)
+
+        if isinstance(node, StandaloneEnum):
+            if len(node.variants) < 2:
+                raise UzonTypeError(
+                    "Enum must have at least 2 variants",
+                    node.line, node.col, file=self._filename,
+                )
+            seen: set[str] = set()
+            for v in node.variants:
+                if v in seen:
+                    raise UzonTypeError(
+                        f"Duplicate variant '{v}' in enum definition",
+                        node.line, node.col, file=self._filename,
+                    )
+                seen.add(v)
+            return UzonEnum(node.variants[0], list(node.variants))
+
+        if isinstance(node, StandaloneUnion):
+            if len(node.types) < 2:
+                raise UzonTypeError(
+                    "Union must have at least 2 member types",
+                    node.line, node.col, file=self._filename,
+                )
+            type_names = [t.name for t in node.types]
+            seen_t: set[str] = set()
+            for tn in type_names:
+                if tn in seen_t:
+                    raise UzonTypeError(
+                        f"Duplicate type '{tn}' in union definition",
+                        node.line, node.col, file=self._filename,
+                    )
+                seen_t.add(tn)
+            default = self._default_for_type(node.types[0], scope, node)
+            return UzonUnion(default, type_names)
+
+        if isinstance(node, StandaloneTaggedUnion):
+            if len(node.variants) < 2:
+                raise UzonTypeError(
+                    "Tagged union must have at least 2 variants",
+                    node.line, node.col, file=self._filename,
+                )
+            variants_map: dict[str, str | None] = {}
+            for var_name, var_type in node.variants:
+                if var_name in variants_map:
+                    raise UzonTypeError(
+                        f"Duplicate variant '{var_name}' in tagged union definition",
+                        node.line, node.col, file=self._filename,
+                    )
+                variants_map[var_name] = var_type.name if var_type else None
+            first_name, first_type = node.variants[0]
+            default = self._default_for_type(first_type, scope, node)
+            return UzonTaggedUnion(default, first_name, variants_map)
+
+        raise UzonRuntimeError(
+            f"Unknown standalone decl: {type(node).__name__}",
+            node.line, node.col, file=self._filename,
+        )
+
+    def _default_for_type(self, te, scope: Scope, node: Node) -> Any:
+        """§3.6 default value table — compute default for a type expression."""
+        # List types [T]
+        if te.is_list:
+            inner_name = te.inner.name if te.inner else ""
+            return UzonTypedList([], inner_name)
+        # Tuple types (T1, T2, ...)
+        if te.is_tuple:
+            return tuple()
+        name = te.name
+        # Primitives
+        if name == "bool":
+            return False
+        if name == "string":
+            return ""
+        if name == "null":
+            return None
+        # Integers iN / uN
+        if name and len(name) >= 2 and name[0] in ("i", "u") and name[1:].isdigit():
+            return UzonInt(0, name)
+        # Floats fN
+        if name in ("f16", "f32", "f64", "f80", "f128"):
+            return UzonFloat(0.0, name)
+        # Function type — not permitted as standalone default
+        if name == "function":
+            raise UzonTypeError(
+                "Standalone declaration with 'function' as first/only member type is "
+                "not permitted — use inline form with explicit value",
+                node.line, node.col, file=self._filename,
+            )
+        # Named types via scope
+        type_info = scope.get_type(name)
+        if type_info is None:
+            raise UzonTypeError(
+                f"Unknown type '{name}' in standalone declaration",
+                node.line, node.col, file=self._filename,
+            )
+        kind = type_info.get("kind")
+        if kind == "enum":
+            variants = type_info["variants"]
+            return UzonEnum(variants[0], list(variants), type_info["name"])
+        if kind == "struct":
+            fields = type_info.get("field_values", {})
+            return UzonStruct(dict(fields), type_info["name"])
+        if kind == "tagged_union":
+            variants_map = type_info.get("variants", {})
+            if not variants_map:
+                raise UzonTypeError(
+                    f"Named tagged union '{name}' has no variants",
+                    node.line, node.col, file=self._filename,
+                )
+            first_name = next(iter(variants_map))
+            first_type = variants_map[first_name]
+            inner_default: Any = None
+            if first_type:
+                from ..ast_nodes import TypeExpr
+                inner_default = self._default_for_type(
+                    TypeExpr(name=first_type), scope, node
+                )
+            result = UzonTaggedUnion(inner_default, first_name, dict(variants_map))
+            result.type_name = type_info["name"]
+            return result
+        if kind == "union":
+            raise UzonTypeError(
+                f"Nested union '{name}' is not permitted as standalone default — "
+                "use inline form with explicit value",
+                node.line, node.col, file=self._filename,
+            )
+        raise UzonTypeError(
+            f"No default value defined for type '{name}'",
             node.line, node.col, file=self._filename,
         )

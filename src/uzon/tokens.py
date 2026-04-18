@@ -38,6 +38,8 @@ class TokenType(Enum):
     WITH = auto()       # §3.2.1: struct override
     KW_PLUS = auto()    # §3.2.2: struct extension (plus)
     UNION = auto()      # §3.6: union type marker
+    ENUM = auto()       # §3.5: standalone enum declaration
+    TAGGED = auto()     # §3.7: standalone tagged union (paired with union)
 
     # ── Keywords — functions (§3.8) ───────────────────────────────
     FUNCTION = auto()   # §3.8: function definition
@@ -129,6 +131,8 @@ KEYWORDS: dict[str, TokenType] = {
     "with": TokenType.WITH,
     "plus": TokenType.KW_PLUS,
     "union": TokenType.UNION,
+    "enum": TokenType.ENUM,
+    "tagged": TokenType.TAGGED,
     "function": TokenType.FUNCTION,
     "returns": TokenType.RETURNS,
     "default": TokenType.DEFAULT,
