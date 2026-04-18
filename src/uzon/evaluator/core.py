@@ -67,6 +67,8 @@ class Evaluator(
         # Push entry file to import stack for circular import detection
         if self._filename != "<string>":
             self._import_stack.append(self._filename)
+        # §6.1: every `[]` literal must be immediately wrapped by `as [Type]`.
+        self._check_empty_list_annotations(doc)
         scope = Scope()
         scope.define("std", self._build_std())
         try:
@@ -77,6 +79,30 @@ class Evaluator(
         result = scope.to_dict()
         result.pop("std", None)
         return result
+
+    # ── static checks ─────────────────────────────────────────────────
+
+    def _check_empty_list_annotations(self, node: Any, wrapped: bool = False) -> None:
+        """§6.1: Every empty ``[]`` literal must be directly wrapped by
+        ``as [Type]``. Enforced as a static AST check before evaluation.
+        """
+        if isinstance(node, ListLiteral) and not node.elements and not wrapped:
+            raise UzonTypeError(
+                "Empty list requires explicit type annotation: [] as [Type]",
+                node.line, node.col, file=self._filename,
+            )
+        if isinstance(node, TypeAnnotation):
+            self._check_empty_list_annotations(
+                node.expr, wrapped=bool(node.type and node.type.is_list)
+            )
+            return
+        if isinstance(node, list):
+            for item in node:
+                self._check_empty_list_annotations(item)
+            return
+        if isinstance(node, Node):
+            for fname in getattr(node, "__dataclass_fields__", {}):
+                self._check_empty_list_annotations(getattr(node, fname))
 
     # ── binding evaluation ─────────────────────────────────────────────
 
