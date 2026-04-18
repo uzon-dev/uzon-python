@@ -225,8 +225,14 @@ class Evaluator(
                     "Standalone type declaration cannot be combined with 'called'",
                     b.value.line, b.value.col, file=self._filename,
                 )
+            self._check_no_self_type_reference(b.value, b.name, b)
             value = self._eval_standalone_decl(b.value, scope)
             return self._register_called(b.name, value, b, scope)
+
+        # §6.4: Recursive type definitions are forbidden. When this binding will
+        # name a type (via `called`), detect self-reference in its value AST.
+        if b.called is not None:
+            self._check_no_self_type_reference(b.value, b.called, b)
 
         value = self._eval_node(b.value, scope, exclude=b.name)
 
@@ -469,6 +475,101 @@ class Evaluator(
             f"Evaluation not yet implemented for {type(node).__name__}",
             node.line, node.col, file=self._filename,
         )
+
+    # ── recursive type detection (§6.4) ───────────────────────────────
+
+    def _check_no_self_type_reference(
+        self, node: Node, type_name: str, binding: Binding
+    ) -> None:
+        """§6.4: Reject recursive type definitions.
+
+        Walks the value AST and raises UzonTypeError if any TypeExpr references
+        ``type_name`` — the name the binding is about to claim. Since type
+        declarations require forward references to resolve and UZON has no
+        forward declarations, direct self-reference is the only form of
+        recursion possible within a single binding.
+        """
+        from ..ast_nodes import (
+            TypeExpr as _TypeExpr,
+            TypeAnnotation as _TypeAnnotation,
+            Conversion as _Conversion,
+            FunctionParam as _FunctionParam,
+            FunctionExpr as _FunctionExpr,
+            FromUnion as _FromUnion,
+            NamedVariant as _NamedVariant,
+        )
+
+        def check_type(te: _TypeExpr | None) -> None:
+            if te is None:
+                return
+            if te.is_list:
+                check_type(te.inner)
+                return
+            if te.is_tuple:
+                for elem in te.elements:
+                    check_type(elem)
+                return
+            if te.name == type_name:
+                raise UzonTypeError(
+                    f"Recursive type definition: '{type_name}' references itself",
+                    te.line or binding.line, te.col or binding.col,
+                    file=self._filename,
+                )
+
+        def walk(n: Node | None) -> None:
+            if n is None:
+                return
+            if isinstance(n, _TypeAnnotation):
+                check_type(n.type)
+                walk(n.expr)
+                return
+            if isinstance(n, _Conversion):
+                check_type(n.type)
+                walk(n.expr)
+                return
+            if isinstance(n, _FunctionParam):
+                check_type(n.type)
+                walk(n.default)
+                return
+            if isinstance(n, _FunctionExpr):
+                for p in n.params:
+                    walk(p)
+                check_type(n.return_type)
+                for bb in n.body_bindings:
+                    walk(bb)
+                walk(n.body_expr)
+                return
+            if isinstance(n, _FromUnion):
+                for t in n.types:
+                    check_type(t)
+                walk(n.value)
+                return
+            if isinstance(n, _NamedVariant):
+                for _tag, t in n.variants:
+                    check_type(t)
+                walk(n.value)
+                return
+            if isinstance(n, StandaloneStruct):
+                walk(n.struct)
+                return
+            if isinstance(n, StandaloneUnion):
+                for t in n.types:
+                    check_type(t)
+                return
+            if isinstance(n, StandaloneTaggedUnion):
+                for _tag, t in n.variants:
+                    check_type(t)
+                return
+            # Recurse into compound AST fields
+            for _fname, fval in vars(n).items():
+                if isinstance(fval, Node):
+                    walk(fval)
+                elif isinstance(fval, list):
+                    for item in fval:
+                        if isinstance(item, Node):
+                            walk(item)
+
+        walk(node)
 
     # ── standalone type declarations (§3.2 / §3.5 / §3.6 / §3.7) ─────
 
