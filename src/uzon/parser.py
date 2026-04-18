@@ -413,25 +413,15 @@ class Parser:
     def _parse_type_decl(self) -> Node:
         """§9 type_decl = type_annot_level [from_clause | named_clause].
 
-        Accepts both orders for tagged-union reuse:
-          - ``value as Type named tag`` (canonical, per §3.7 example)
-          - ``value named tag as Type`` (equivalent — normalized by folding
-            the trailing ``as Type`` into the NamedVariant's value).
+        For tagged-union reuse (§3.7), only the canonical order
+        ``value as Type named tag`` is accepted — ``as`` must precede ``named``.
         """
         node = self._parse_type_annot()
         self._skip_nl_if_cont()
         if self._peek_type() == TokenType.FROM:
             return self._parse_from_clause(node)
         if self._peek_type() == TokenType.NAMED:
-            node = self._parse_named_clause(node)
-            self._skip_nl_if_cont()
-            if self._peek_type() == TokenType.AS and isinstance(node, NamedVariant):
-                tok = self._advance()
-                te = self._parse_type_expr()
-                node.value = TypeAnnotation(
-                    expr=node.value, type=te, line=tok.line, col=tok.col,
-                )
-            return node
+            return self._parse_named_clause(node)
         return node
 
     def _parse_from_clause(self, value: Node) -> Node:
@@ -867,6 +857,7 @@ class Parser:
                 f"Expected 'union' after 'tagged', got {self._peek().type.name}"
             )
         self._advance()  # union
+        self._skip_nl()
         variants: list[tuple[str, TypeExpr]] = []
         vn = self._parse_variant_name()
         self._expect(TokenType.AS)
