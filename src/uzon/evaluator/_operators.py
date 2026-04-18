@@ -466,7 +466,13 @@ class OperatorMixin:
                 r = math.copysign(float("inf"), fl) if (fr == int(fr) and int(fr) % 2 != 0) else float("inf")
                 return self._typed_float_result(r, result_type, adoptable=result_adoptable)
             if fl < 0 and fr != int(fr):
-                return self._typed_float_result(float("nan"), result_type, adoptable=result_adoptable)
+                # §5.3: Negative base with non-integer exponent would produce
+                # a complex number, which UZON does not support.
+                raise UzonRuntimeError(
+                    "Negative base with non-integer exponent — "
+                    "result would be complex (unsupported)",
+                    node.line, node.col, file=self._filename,
+                )
             try:
                 return self._typed_float_result(math.pow(fl, fr), result_type, adoptable=result_adoptable)
             except (ValueError, OverflowError):
