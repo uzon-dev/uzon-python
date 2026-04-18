@@ -35,6 +35,15 @@ class FunctionMixin:
             default = None
             if param.default is not None:
                 default = self._eval_node(param.default, scope, exclude)
+                # §3.8: default value must be defined and match the param type
+                if default is UzonUndefined:
+                    raise UzonTypeError(
+                        f"Default for parameter '{param.name}' is undefined",
+                        param.default.line, param.default.col,
+                        file=self._filename,
+                    )
+                self._check_type_assertion(default, param.type, param.default, scope)
+                default = self._wrap_typed(default, param.type)
             params.append((param.name, type_name, default))
 
         # §6.2: Validate return type exists in scope at definition time
