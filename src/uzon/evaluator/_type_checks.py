@@ -185,6 +185,19 @@ class TypeChecksMixin:
                 f"'as {type_name}' requires a struct, got {self._type_name(value)}",
                 node.line, node.col, file=self._filename,
             )
+        # §3.2.1 rule 5 / §6.3: nominal identity — a value already named
+        # as a different struct type cannot be re-asserted as another.
+        existing_name = None
+        if isinstance(value, UzonStruct) and value.type_name:
+            existing_name = value.type_name
+        else:
+            existing_name = self._called_of.get(id(value))
+        if existing_name and existing_name != type_name:
+            raise UzonTypeError(
+                f"'as {type_name}' type mismatch: value is {existing_name} "
+                "(nominal identity — separately named struct types are incompatible)",
+                node.line, node.col, file=self._filename,
+            )
         expected_fields = type_info["fields"]
         actual_fields = set(value.keys())
         if expected_fields != actual_fields:
