@@ -319,6 +319,22 @@ class Evaluator(
 
     def _eval_are_binding(self, b: AreBinding, scope: Scope) -> list:
         """Evaluate an `are` binding (list sugar)."""
+        # §3.4.1: the `as` annotation at the tail of an `are` binding is the
+        # list-level annotation (per §9 it is lifted out of the final element).
+        # If the annotation is not a list type — neither `[T]` nor a named
+        # list type — the binding annotates a list as a non-list, which is
+        # a type error. Check upfront so the diagnostic wins over later
+        # homogeneity or per-element errors.
+        if b.type_annotation and not b.type_annotation.is_list:
+            type_info = scope.get_type(b.type_annotation.name)
+            if type_info is None or type_info.get("kind") != "list":
+                raise UzonTypeError(
+                    f"'are' binding produces a list — type annotation must be "
+                    f"a list type like [{b.type_annotation.name}], not bare "
+                    f"{b.type_annotation.name}",
+                    b.type_annotation.line, b.type_annotation.col,
+                    file=self._filename,
+                )
         elements = []
         for elem in b.elements:
             v = self._eval_node(elem, scope, exclude=b.name)
