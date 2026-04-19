@@ -11,7 +11,7 @@ from typing import Any
 
 from ..ast_nodes import (
     AreBinding, Binding, Identifier, IntegerLiteral, ListLiteral,
-    Node, TypeAnnotation, TypeExpr,
+    NamedVariant, Node, TypeAnnotation, TypeExpr,
 )
 from ..errors import UzonSyntaxError, UzonTypeError
 from ..scope import Scope
@@ -98,6 +98,13 @@ class TypeAnnotationMixin:
         """§6.1: Evaluate `expr as Type` — assertion, not conversion."""
         # §6.3: Check for enum variant resolution
         type_info = self._resolve_named_type(node.type, scope, node)
+
+        # §3.7 v0.10: variant_shorthand inside `as TaggedUnionType`.
+        if type_info and type_info.get("kind") == "tagged_union":
+            result = self._try_tagged_shorthand(node, type_info, scope, exclude)
+            if result is not None:
+                return result
+
         if type_info and type_info.get("kind") == "enum" and isinstance(node.expr, Identifier):
             variant_name = node.expr.name
             variants = type_info["variants"]
@@ -136,6 +143,99 @@ class TypeAnnotationMixin:
 
         self._check_type_assertion(value, node.type, node, scope)
         return self._wrap_typed(value, node.type)
+
+    def _try_tagged_shorthand(
+        self, node: TypeAnnotation, type_info: dict, scope: Scope, exclude: str | None
+    ) -> Any | None:
+        """§3.7 v0.10: Resolve variant_shorthand under `as TaggedUnionType`.
+
+        Handles two forms:
+          - ``variant_name inner_value as Type`` (parsed as NamedVariant
+            with empty variants)
+          - ``variant_name as Type`` (parsed as Identifier) — only valid
+            when the variant's type is null.
+
+        Returns the resulting UzonTaggedUnion, or None if the expression
+        does not match either shorthand form (falls through to default).
+        """
+        variants = type_info["variants"]
+        type_name = type_info["name"]
+
+        # Form 1: NamedVariant with empty variants → resolve via outer type.
+        if isinstance(node.expr, NamedVariant) and not node.expr.variants:
+            tag = node.expr.tag
+            if tag not in variants:
+                raise UzonTypeError(
+                    f"'{tag}' is not a variant of {type_name}",
+                    node.line, node.col, file=self._filename,
+                )
+            variant_type = variants[tag]
+            if variant_type in (None, "null"):
+                raise UzonTypeError(
+                    f"Variant '{tag}' of {type_name} is nullary; "
+                    "cannot take an inner value",
+                    node.line, node.col, file=self._filename,
+                )
+            inner_value = self._eval_variant_inner(
+                node.expr.value, variant_type, scope, exclude, node,
+            )
+            result = UzonTaggedUnion(inner_value, tag, variants)
+            result.type_name = type_name
+            return result
+
+        # Form 2: bare Identifier naming a nullary variant.
+        if isinstance(node.expr, Identifier):
+            tag = node.expr.name
+            if tag in variants and variants[tag] in (None, "null"):
+                result = UzonTaggedUnion(None, tag, variants)
+                result.type_name = type_name
+                return result
+
+        return None
+
+    def _eval_variant_inner(
+        self, inner_node: Node, variant_type: str,
+        scope: Scope, exclude: str | None, outer: Node,
+    ) -> Any:
+        """Evaluate a variant_shorthand's inner value under an expected type.
+
+        If the inner is itself a NamedVariant with empty variants and the
+        expected variant_type resolves to another tagged_union, recurse
+        with that type as context (§3.7 nested shorthand).
+        """
+        inner_type_info = None
+        if variant_type:
+            inner_type_info = scope.get_type(variant_type)
+
+        if (inner_type_info and inner_type_info.get("kind") == "tagged_union"
+                and isinstance(inner_node, NamedVariant)
+                and not inner_node.variants):
+            synthetic = TypeAnnotation(
+                expr=inner_node,
+                type=TypeExpr(name=variant_type, line=outer.line, col=outer.col),
+                line=outer.line, col=outer.col,
+            )
+            return self._eval_type_annotation(synthetic, scope, exclude)
+
+        if (inner_type_info and inner_type_info.get("kind") == "enum"
+                and isinstance(inner_node, Identifier)):
+            variants = inner_type_info["variants"]
+            name = inner_node.name
+            if name not in variants:
+                raise UzonTypeError(
+                    f"'{name}' is not a variant of {variant_type}",
+                    outer.line, outer.col, file=self._filename,
+                )
+            return UzonEnum(name, variants, variant_type)
+
+        value = self._eval_node(inner_node, scope, exclude)
+        if variant_type:
+            self._check_type_assertion(
+                value,
+                TypeExpr(name=variant_type, line=outer.line, col=outer.col),
+                outer, scope,
+            )
+        return value
 
     def _wrap_typed(self, value: Any, type_expr: TypeExpr) -> Any:
         """Wrap a value in a typed wrapper after assertion/conversion."""
