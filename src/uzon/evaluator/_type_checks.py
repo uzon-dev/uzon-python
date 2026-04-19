@@ -330,6 +330,12 @@ class TypeChecksMixin:
                 return True
             if mt == "null" and value is None:
                 return True
+        # §6.3 R7 v0.10: adoptable int literal may promote to a float
+        # member when the union has no integer member.
+        if (isinstance(value, UzonInt) and value.adoptable
+                and not any(INT_TYPE_RE.match(m) for m in member_types)
+                and any(m in FLOAT_TYPES for m in member_types)):
+            return True
         return False
 
     # ── numeric range and repr ────────────────────────────────────────

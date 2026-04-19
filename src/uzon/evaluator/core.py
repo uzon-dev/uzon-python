@@ -537,6 +537,25 @@ class Evaluator(
         # §5.12: Identifier lookup via lexical scope chain
         if isinstance(node, Identifier):
             value = scope.get(node.name, exclude=exclude)
+            # §3.5 R7 v0.10: a bare identifier that doesn't resolve to a
+            # binding but matches enum variants in scope requires explicit
+            # type context (`as EnumType`). Raise rather than silently
+            # producing undefined, which would hide the missing context.
+            if value is UzonUndefined and not scope.has(node.name):
+                owners = scope.find_enum_variant_owners(node.name)
+                if len(owners) > 1:
+                    raise UzonTypeError(
+                        f"Bare variant '{node.name}' is ambiguous — "
+                        f"declared in enums: {', '.join(owners)}. "
+                        f"Disambiguate with 'as <EnumType>'.",
+                        node.line, node.col, file=self._filename,
+                    )
+                if len(owners) == 1:
+                    raise UzonTypeError(
+                        f"Bare variant '{node.name}' needs type context — "
+                        f"annotate with 'as {owners[0]}'.",
+                        node.line, node.col, file=self._filename,
+                    )
             return value
 
         raise UzonRuntimeError(

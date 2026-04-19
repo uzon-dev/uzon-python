@@ -160,7 +160,35 @@ class TypeAnnotationMixin:
             return UzonUndefined
 
         self._check_type_assertion(value, node.type, node, scope)
+        # §6.3 R7 v0.10: adoptable numeric literal applied to a named
+        # union adopts the first member type whose category matches
+        # (integer/float). Integer-to-float promotion applies only when
+        # no integer member exists.
+        if type_info and type_info.get("kind") == "union":
+            value = self._adopt_literal_to_union(value, type_info.get("types", []))
         return self._wrap_typed(value, node.type)
+
+    @staticmethod
+    def _adopt_literal_to_union(value: Any, members: list[str]) -> Any:
+        """§6.3 R7 v0.10: Promote an adoptable numeric literal to the
+        first matching union member type.
+
+        * adoptable ``UzonInt`` → first ``i*``/``u*`` member; otherwise
+          first ``f*`` member via integer-to-float promotion.
+        * adoptable ``UzonFloat`` → first ``f*`` member.
+        """
+        if isinstance(value, UzonInt) and value.adoptable:
+            for mt in members:
+                if INT_TYPE_RE.match(mt):
+                    return UzonInt(int(value), mt)
+            for mt in members:
+                if mt in FLOAT_TYPES:
+                    return UzonFloat(float(int(value)), mt)
+        elif isinstance(value, UzonFloat) and value.adoptable:
+            for mt in members:
+                if mt in FLOAT_TYPES:
+                    return UzonFloat(float(value), mt)
+        return value
 
     def _struct_field_enum_hints(self, type_info: dict) -> dict[str, dict]:
         """Return {field_name: enum_type_info} for struct fields declared

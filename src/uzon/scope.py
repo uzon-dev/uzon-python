@@ -61,6 +61,22 @@ class Scope:
             return True
         return self._parent.has(name) if self._parent else False
 
+    def find_enum_variant_owners(self, variant: str) -> list[str]:
+        """§3.5 R7 v0.10: Return names of all enum types (walking the
+        scope chain) whose variants include *variant*. Used to diagnose
+        ambiguous/unresolvable bare variant references.
+        """
+        owners: list[str] = []
+        s: Scope | None = self
+        while s is not None:
+            for tname, tinfo in s._types.items():
+                if (tinfo.get("kind") == "enum"
+                        and variant in tinfo.get("variants", {})
+                        and tname not in owners):
+                    owners.append(tname)
+            s = s._parent
+        return owners
+
     def to_dict(self) -> dict[str, Any]:
         """Return bindings as a dict, excluding undefined values."""
         return {k: v for k, v in self._bindings.items() if v is not UzonUndefined}
