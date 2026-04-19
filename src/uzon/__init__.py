@@ -18,7 +18,7 @@ from .types import (
 )
 from .val import _ValFactory
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 val = _ValFactory()
 

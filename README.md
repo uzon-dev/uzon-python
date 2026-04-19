@@ -18,7 +18,7 @@ print(data["server"]["port"])   # UzonInt(8080, 'u16')
 
 ```python
 >>> uzon.__version__
-'0.9.0'
+'0.10.0'
 ```
 
 ## Installation
