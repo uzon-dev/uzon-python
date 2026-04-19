@@ -61,21 +61,25 @@ class Scope:
             return True
         return self._parent.has(name) if self._parent else False
 
-    def find_enum_variant_owners(self, variant: str) -> list[str]:
-        """§3.5 R7 v0.10: Return names of all enum types (walking the
-        scope chain) whose variants include *variant*. Used to diagnose
-        ambiguous/unresolvable bare variant references.
+    def enum_members_with_variant(
+        self, variant: str, type_names: list[str],
+    ) -> list[str]:
+        """§3.5 R7 v0.10: Given a fixed list of enum type names *type_names*,
+        return the subset whose declared variants include *variant*.
+
+        This is NOT a global enum-variant search (§3.5 explicitly rules
+        that out). It is used only when *type_names* already restricts
+        the search to a specific scope — e.g., the members of a named
+        union being asserted against.
         """
-        owners: list[str] = []
-        s: Scope | None = self
-        while s is not None:
-            for tname, tinfo in s._types.items():
-                if (tinfo.get("kind") == "enum"
-                        and variant in tinfo.get("variants", {})
-                        and tname not in owners):
-                    owners.append(tname)
-            s = s._parent
-        return owners
+        matches: list[str] = []
+        for tn in type_names:
+            info = self.get_type(tn)
+            if (info is not None
+                    and info.get("kind") == "enum"
+                    and variant in info.get("variants", {})):
+                matches.append(tn)
+        return matches
 
     def to_dict(self) -> dict[str, Any]:
         """Return bindings as a dict, excluding undefined values."""

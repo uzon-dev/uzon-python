@@ -134,6 +134,32 @@ class TypeAnnotationMixin:
                 )
             return UzonEnum(variant_name, variants, type_info["name"])
 
+        # §3.5 R7 v0.10: bare Identifier asserted against a named union
+        # whose members include multiple enums sharing this variant name.
+        # The assertion carries no further discriminator, so the reference
+        # is ambiguous — raise rather than pick one.
+        if (type_info and type_info.get("kind") == "union"
+                and isinstance(node.expr, Identifier)
+                and not scope.has(node.expr.name)):
+            member_types = type_info.get("types", [])
+            matching = scope.enum_members_with_variant(
+                node.expr.name, member_types,
+            )
+            if len(matching) > 1:
+                raise UzonTypeError(
+                    f"Bare variant '{node.expr.name}' is ambiguous under "
+                    f"union {type_info['name']} — variant declared by "
+                    f"{', '.join(matching)}. Qualify with the specific "
+                    "enum, e.g., `X.v as " + type_info["name"] + "`.",
+                    node.line, node.col, file=self._filename,
+                )
+            if len(matching) == 1:
+                only = matching[0]
+                enum_info = scope.get_type(only)
+                return UzonEnum(
+                    node.expr.name, enum_info["variants"], only,
+                )
+
         # List of enum variants: [id, id, ...] as [EnumType]
         if node.type.is_list and node.type.inner and isinstance(node.expr, ListLiteral):
             inner_type_info = self._resolve_named_type(node.type.inner, scope, node)
