@@ -61,6 +61,9 @@ class Evaluator(
         self._called_of: dict[int, str] = {}    # id(result_dict) → type_name (§6.2)
         self._call_stack: list[int] = []  # §3.8: recursion detection
         self._collected_errors: list = []  # multi-error collection
+        # §3.5 R7 v0.10: stack of {field_name: enum_type_info} for bare
+        # enum variants resolved via outer struct field type context.
+        self._field_enum_hints_stack: list[dict[str, dict]] = []
 
     def evaluate(self, doc: Document) -> dict[str, Any]:
         """§3: Evaluate a Document AST into a Python dict."""

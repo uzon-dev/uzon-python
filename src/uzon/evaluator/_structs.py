@@ -13,7 +13,7 @@ import os
 from typing import Any
 
 from ..ast_nodes import (
-    AreBinding, Binding, MemberAccess, Node, EnvRef,
+    AreBinding, Binding, Identifier, MemberAccess, Node, EnvRef,
     StructImport, StructLiteral, StructExtension, StructOverride,
 )
 from ..errors import UzonCircularError, UzonError, UzonRuntimeError, UzonTypeError
@@ -110,10 +110,49 @@ class StructMixin:
     def _eval_struct_literal(self, node: StructLiteral, scope: Scope) -> dict[str, Any]:
         """§3.2: Evaluate a struct literal into a dict with a child scope."""
         child_scope = Scope(parent=scope)
-        self._evaluate_bindings(node.fields, child_scope, struct_context=True)
+        # §3.5 R7 v0.10: if outer `as StructType` provided enum type hints,
+        # rewrite bare-identifier field values to carry their resolved enum
+        # type annotation before evaluating the bindings.
+        hints = self._field_enum_hints_stack.pop() if self._field_enum_hints_stack else None
+        fields = node.fields
+        if hints:
+            fields = self._rewrite_bare_enum_fields(fields, hints)
+        self._evaluate_bindings(fields, child_scope, struct_context=True)
         result = child_scope.to_dict()
         self._scope_of[id(result)] = child_scope
         return result
+
+    def _rewrite_bare_enum_fields(
+        self, fields: list, hints: dict[str, dict],
+    ) -> list:
+        """§3.5 R7 v0.10: Replace each Binding whose value is a bare
+        Identifier matching a hinted enum variant with a copy whose
+        value is wrapped in a TypeAnnotation. Non-matching fields pass
+        through unchanged.
+        """
+        from dataclasses import replace
+        from ..ast_nodes import TypeAnnotation, TypeExpr
+        new_fields = []
+        for field in fields:
+            if not isinstance(field, Binding):
+                new_fields.append(field)
+                continue
+            hint = hints.get(field.name)
+            if hint is None or not isinstance(field.value, Identifier):
+                new_fields.append(field)
+                continue
+            vname = field.value.name
+            if vname not in hint["variants"]:
+                new_fields.append(field)
+                continue
+            ident = field.value
+            wrapped = TypeAnnotation(
+                expr=ident,
+                type=TypeExpr(name=hint["name"], line=ident.line, col=ident.col),
+                line=ident.line, col=ident.col,
+            )
+            new_fields.append(replace(field, value=wrapped))
+        return new_fields
 
     # ── struct override (§3.2.1) ─────────────────────────────────────
 

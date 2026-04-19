@@ -11,7 +11,7 @@ from typing import Any
 
 from ..ast_nodes import (
     AreBinding, Binding, Identifier, IntegerLiteral, ListLiteral,
-    NamedVariant, Node, TypeAnnotation, TypeExpr,
+    NamedVariant, Node, StructLiteral, TypeAnnotation, TypeExpr,
 )
 from ..errors import UzonSyntaxError, UzonTypeError
 from ..scope import Scope
@@ -105,6 +105,24 @@ class TypeAnnotationMixin:
             if result is not None:
                 return result
 
+        # §3.5 v0.10: bare enum variants inside `{ ... } as StructType`
+        # resolve via the struct's field_values (which carry the declared
+        # enum type for each field). _eval_struct_literal consumes the
+        # pushed hints; on any abrupt path we defensively clean up.
+        if (type_info and type_info.get("kind") == "struct"
+                and isinstance(node.expr, StructLiteral)):
+            hints = self._struct_field_enum_hints(type_info)
+            if hints:
+                depth = len(self._field_enum_hints_stack)
+                self._field_enum_hints_stack.append(hints)
+                try:
+                    value = self._eval_node(node.expr, scope, exclude)
+                finally:
+                    if len(self._field_enum_hints_stack) > depth:
+                        self._field_enum_hints_stack.pop()
+                self._check_type_assertion(value, node.type, node, scope)
+                return self._wrap_typed(value, node.type)
+
         if type_info and type_info.get("kind") == "enum" and isinstance(node.expr, Identifier):
             variant_name = node.expr.name
             variants = type_info["variants"]
@@ -143,6 +161,21 @@ class TypeAnnotationMixin:
 
         self._check_type_assertion(value, node.type, node, scope)
         return self._wrap_typed(value, node.type)
+
+    def _struct_field_enum_hints(self, type_info: dict) -> dict[str, dict]:
+        """Return {field_name: enum_type_info} for struct fields declared
+        with an enum type — used to resolve bare variants in struct
+        literals per §3.5 R7 v0.10.
+        """
+        hints: dict[str, dict] = {}
+        field_values = type_info.get("field_values", {})
+        for fname, fval in field_values.items():
+            if isinstance(fval, UzonEnum) and fval.type_name:
+                hints[fname] = {
+                    "name": fval.type_name,
+                    "variants": fval.variants,
+                }
+        return hints
 
     def _try_tagged_shorthand(
         self, node: TypeAnnotation, type_info: dict, scope: Scope, exclude: str | None
