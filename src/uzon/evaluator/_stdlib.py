@@ -49,6 +49,14 @@ class StdlibMixin:
             "endsWith": UzonBuiltinFunction("endsWith", self._std_endsWith, 2, 2),
         }
 
+    # ── helpers ──────────────────────────────────────────────────────
+
+    def _preserve_list_type(self, src: list, dst: list) -> None:
+        """§5.16.4: Preserve named list type from *src* onto *dst*."""
+        name = self._called_of.get(id(src))
+        if name is not None:
+            self._called_of[id(dst)] = name
+
     # ── collection functions ─────────────────────────────────────────
 
     def _std_len(self, args: list, node: Node) -> UzonInt:
@@ -167,6 +175,7 @@ class StdlibMixin:
                 )
             if val:
                 result.append(elem)
+        self._preserve_list_type(lst, result)
         return result
 
     def _std_sort(self, args: list, node: Node) -> list:
@@ -194,7 +203,9 @@ class StdlibMixin:
             if val2:
                 return 1
             return 0
-        return sorted(lst, key=functools.cmp_to_key(cmp))
+        result = sorted(lst, key=functools.cmp_to_key(cmp))
+        self._preserve_list_type(lst, result)
+        return result
 
     def _std_reduce(self, args: list, node: Node) -> Any:
         lst, initial, func = args[0], args[1], args[2]
@@ -335,7 +346,9 @@ class StdlibMixin:
     def _std_reverse(self, args: list, node: Node) -> Any:
         val = args[0]
         if isinstance(val, list):
-            return val[::-1]
+            result = val[::-1]
+            self._preserve_list_type(val, result)
+            return result
         if isinstance(val, str):
             return val[::-1]
         raise UzonTypeError(

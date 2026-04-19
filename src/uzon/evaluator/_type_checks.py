@@ -157,6 +157,14 @@ class TypeChecksMixin:
                 file=self._filename,
             )
         kind = type_info.get("kind")
+        # §6.1 (R6): null as NamedEnum is a type error — enums are a closed
+        # set of variant names; null is not a variant.
+        if value is None and kind == "enum":
+            raise UzonTypeError(
+                f"'as {type_name}' requires an enum variant, got null "
+                "(enums are a closed set; null is not a variant)",
+                node.line, node.col, file=self._filename,
+            )
         if kind == "tagged_union":
             raise UzonTypeError(
                 f"'as {type_name}' requires 'named' to specify the active variant",
@@ -200,18 +208,21 @@ class TypeChecksMixin:
             )
         expected_fields = type_info["fields"]
         actual_fields = set(value.keys())
-        if expected_fields != actual_fields:
-            extra = actual_fields - expected_fields
-            missing = expected_fields - actual_fields
-            parts = []
-            if extra:
-                parts.append(f"extra: {', '.join(sorted(extra))}")
+        extra = actual_fields - expected_fields
+        missing = expected_fields - actual_fields
+        if extra:
+            parts = [f"extra: {', '.join(sorted(extra))}"]
             if missing:
                 parts.append(f"missing: {', '.join(sorted(missing))}")
             raise UzonTypeError(
                 f"'as {type_name}' field mismatch — {'; '.join(parts)}",
                 node.line, node.col, file=self._filename,
             )
+        # §3.2 v0.10: missing fields are filled from declared defaults.
+        if missing:
+            defaults = type_info.get("field_values", {})
+            for key in missing:
+                value[key] = defaults.get(key)
         original = type_info.get("field_values")
         if original:
             for key in expected_fields:
@@ -543,7 +554,8 @@ class TypeChecksMixin:
             called = self._called_of.get(id(val))
             return called if called else "struct"
         if isinstance(val, list):
-            return "list"
+            called = self._called_of.get(id(val))
+            return called if called else "list"
         if isinstance(val, tuple):
             return "tuple"
         if isinstance(val, UzonFunction):

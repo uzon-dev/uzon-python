@@ -72,6 +72,7 @@ class TypeAnnotationMixin:
             self._called_of[id(value)] = type_name
         elif isinstance(value, list):
             type_info["kind"] = "list"
+            self._called_of[id(value)] = type_name
             for i, elem in enumerate(value):
                 old_elem_id = id(elem)
                 if isinstance(elem, dict) and not isinstance(elem, UzonStruct):
