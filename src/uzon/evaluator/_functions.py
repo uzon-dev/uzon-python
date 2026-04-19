@@ -115,12 +115,31 @@ class FunctionMixin:
                 val = self._eval_node(binding.value, body_scope, binding.name)
                 body_scope.define(binding.name, val)
                 body_binding_scope.define(binding.name, val)
-            result = self._eval_node(func.body_expr, body_scope, None)
+            result = self._eval_body_with_return_hint(
+                func.body_expr, func.return_type, body_scope,
+            )
         finally:
             self._call_stack.pop()
 
         self._check_return_type(result, func.return_type, node)
         return result
+
+    def _eval_body_with_return_hint(
+        self, body_expr: Any, return_type: str, scope: Scope,
+    ) -> Any:
+        """§3.5 R7 v0.10: If the function body is a bare Identifier and
+        the return type resolves to a named enum whose variants include
+        that identifier, return the corresponding UzonEnum."""
+        from ..ast_nodes import Identifier as _Ident
+        if isinstance(body_expr, _Ident) and return_type:
+            type_info = scope.get_type(return_type)
+            if (type_info and type_info.get("kind") == "enum"
+                    and body_expr.name in type_info["variants"]):
+                from ..types import UzonEnum as _UE
+                return _UE(
+                    body_expr.name, type_info["variants"], type_info["name"],
+                )
+        return self._eval_node(body_expr, scope, None)
 
     def _apply_function(self, func: UzonFunction, args: list, node: Node) -> Any:
         """Apply a UzonFunction to arguments (used by std.map/filter/reduce/sort)."""
