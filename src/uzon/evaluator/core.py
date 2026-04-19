@@ -755,9 +755,12 @@ class Evaluator(
         if te.is_list:
             inner_name = te.inner.name if te.inner else ""
             return UzonTypedList([], inner_name)
-        # Tuple types (T1, T2, ...)
+        # Tuple types (T1, T2, ...) — §3.6 Option B: per-element recursion.
         if te.is_tuple:
-            return tuple()
+            return tuple(
+                self._default_for_type(elem, scope, node)
+                for elem in (te.elements or [])
+            )
         name = te.name
         # Primitives
         if name == "bool":
