@@ -69,6 +69,8 @@ class Evaluator(
             self._import_stack.append(self._filename)
         # §6.1: every `[]` literal must be immediately wrapped by `as [Type]`.
         self._check_empty_list_annotations(doc)
+        # §3.1: literal `undefined` is only allowed as is/is not operand.
+        self._check_undefined_literals(doc)
         scope = Scope()
         scope.define("std", self._build_std())
         try:
@@ -103,6 +105,33 @@ class Evaluator(
         if isinstance(node, Node):
             for fname in getattr(node, "__dataclass_fields__", {}):
                 self._check_empty_list_annotations(getattr(node, fname))
+
+    def _check_undefined_literals(self, node: Any) -> None:
+        """§3.1: Literal ``undefined`` may only appear as an operand of
+        ``is`` or ``is not``. Enforced as a static AST check.
+        """
+        if isinstance(node, UndefinedLiteral):
+            raise UzonTypeError(
+                "Literal 'undefined' only allowed as operand of 'is' or 'is not'",
+                node.line, node.col, file=self._filename,
+            )
+        from ..ast_nodes import BinaryOp
+        if isinstance(node, BinaryOp) and node.op in ("is", "is not"):
+            # Skip operand sub-tree when it IS directly an UndefinedLiteral.
+            left = node.left if isinstance(node.left, UndefinedLiteral) else None
+            right = node.right if isinstance(node.right, UndefinedLiteral) else None
+            if left is None:
+                self._check_undefined_literals(node.left)
+            if right is None:
+                self._check_undefined_literals(node.right)
+            return
+        if isinstance(node, list):
+            for item in node:
+                self._check_undefined_literals(item)
+            return
+        if isinstance(node, Node):
+            for fname in getattr(node, "__dataclass_fields__", {}):
+                self._check_undefined_literals(getattr(node, fname))
 
     # ── binding evaluation ─────────────────────────────────────────────
 

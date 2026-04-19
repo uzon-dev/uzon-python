@@ -706,7 +706,7 @@ class TestStdLibrary:
 
 class TestUndefined:
     def test_literal_undefined_error(self):
-        with pytest.raises(UzonTypeError, match="Cannot assign literal"):
+        with pytest.raises(UzonTypeError, match="only allowed as operand of 'is' or 'is not'"):
             evaluate("x is undefined")
 
     def test_undefined_propagation(self):

@@ -18,7 +18,9 @@ from ..ast_nodes import (
 )
 from ..errors import UzonCircularError, UzonError, UzonRuntimeError, UzonTypeError
 from ..scope import Scope
-from ..types import UzonFloat, UzonInt, UzonStruct, UzonTaggedUnion, UzonUndefined
+from ..types import (
+    UzonFloat, UzonFunction, UzonInt, UzonStruct, UzonTaggedUnion, UzonUndefined,
+)
 from ._constants import INT_TYPE_RE
 
 
@@ -54,6 +56,11 @@ class StructMixin:
         if obj is None:
             raise UzonTypeError(
                 "Member access on null — null is a value, not a missing state",
+                node.line, node.col, file=self._filename,
+            )
+        if isinstance(obj, UzonFunction):
+            raise UzonTypeError(
+                "Member access on function value — functions have no fields",
                 node.line, node.col, file=self._filename,
             )
         if isinstance(obj, dict):
