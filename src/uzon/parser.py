@@ -596,6 +596,19 @@ class Parser:
 
     # ── primary (§9) ──────────────────────────────────────────────────
 
+    # Token types that can start a primary — used for variant_shorthand
+    # lookahead. LPAREN is excluded because it is consumed as a call suffix
+    # at the postfix level (§5.15).
+    _PRIMARY_START: frozenset[TokenType] = frozenset({
+        TokenType.INTEGER, TokenType.FLOAT, TokenType.STRING,
+        TokenType.TRUE, TokenType.FALSE, TokenType.NULL,
+        TokenType.INF, TokenType.NAN, TokenType.IDENTIFIER,
+        TokenType.LBRACE, TokenType.LBRACKET,
+        TokenType.IF, TokenType.CASE, TokenType.STRUCT,
+        TokenType.ENUM, TokenType.UNION, TokenType.TAGGED,
+        TokenType.FUNCTION, TokenType.ENV,
+    })
+
     def _parse_primary(self) -> Node:
         tok = self._peek()
 
@@ -630,6 +643,18 @@ class Parser:
             return EnvRef(line=tok.line, col=tok.col)
         if tok.type == TokenType.IDENTIFIER:
             self._advance()
+            # §3.7 v0.10: variant_shorthand = variant_name , primary.
+            # If the next token (same line) starts a primary, consume it as
+            # the inner value. The resulting NamedVariant has empty variants;
+            # the evaluator resolves the tagged-union type from context.
+            nxt = self._peek()
+            if (nxt.line == tok.line
+                    and nxt.type in self._PRIMARY_START):
+                inner = self._parse_primary()
+                return NamedVariant(
+                    value=inner, tag=tok.value, variants=[],
+                    line=tok.line, col=tok.col,
+                )
             return Identifier(name=tok.value, line=tok.line, col=tok.col)
         if tok.type == TokenType.LBRACE:
             return self._parse_struct_literal()
