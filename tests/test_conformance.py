@@ -79,14 +79,25 @@ def test_eval(name: str):
 # ── parse/valid tests ────────────────────────────────────────────
 
 
-def _collect_parse_valid():
-    _dir = CONFORMANCE_DIR / "parse" / "valid"
-    if not _dir.is_dir():
+def _collect_uzon_tests(base: Path) -> list[str]:
+    """Collect test names, treating multi-file tests as a single entry.
+
+    Convention: when a directory contains ``entry.uzon``, that file is the
+    test entry point and sibling files are imported modules — exclude the
+    siblings from parametrization.
+    """
+    if not base.is_dir():
         return []
-    return sorted(
-        str(f.relative_to(_dir).with_suffix("")).replace(os.sep, "/")
-        for f in _dir.rglob("*.uzon")
-    )
+    results: list[str] = []
+    for f in base.rglob("*.uzon"):
+        if f.name != "entry.uzon" and (f.parent / "entry.uzon").exists():
+            continue
+        results.append(str(f.relative_to(base).with_suffix("")).replace(os.sep, "/"))
+    return sorted(results)
+
+
+def _collect_parse_valid():
+    return _collect_uzon_tests(CONFORMANCE_DIR / "parse" / "valid")
 
 
 @pytest.mark.parametrize("name", _collect_parse_valid())
@@ -102,13 +113,7 @@ def test_parse_valid(name: str):
 
 
 def _collect_parse_invalid():
-    _dir = CONFORMANCE_DIR / "parse" / "invalid"
-    if not _dir.is_dir():
-        return []
-    return sorted(
-        str(f.relative_to(_dir).with_suffix("")).replace(os.sep, "/")
-        for f in _dir.rglob("*.uzon")
-    )
+    return _collect_uzon_tests(CONFORMANCE_DIR / "parse" / "invalid")
 
 
 @pytest.mark.parametrize("name", _collect_parse_invalid())

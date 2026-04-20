@@ -436,6 +436,25 @@ class ControlMixin:
                 f"Active variant '{tag}' is not in variant definitions",
                 node.line, node.col, file=self._filename,
             )
+        # §6.1 line 2829: null-valued variant requires null; non-null
+        # variant rejects null. Deeper inner-type conformance checks
+        # are left to downstream evaluation.
+        if tag in variants:
+            expected = variants[tag]
+            if expected in (None, "null") and value is not None:
+                raise UzonTypeError(
+                    f"Variant '{tag}' of "
+                    f"{type_name or 'tagged union'} has inner type "
+                    f"null, got {self._type_name(value)}",
+                    node.line, node.col, file=self._filename,
+                )
+            if expected not in (None, "null") and value is None:
+                raise UzonTypeError(
+                    f"Variant '{tag}' of "
+                    f"{type_name or 'tagged union'} has inner type "
+                    f"{expected}, got null",
+                    node.line, node.col, file=self._filename,
+                )
         result = UzonTaggedUnion(value, tag, variants)
         if type_name:
             result.type_name = type_name
