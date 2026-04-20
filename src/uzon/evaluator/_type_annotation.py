@@ -174,6 +174,39 @@ class TypeAnnotationMixin:
                         elements.append(self._eval_node(elem, scope, exclude))
                 return UzonTypedList(elements, inner_type_info["name"])
 
+            # §3.2.1 line 491 + §3.4: `[{...}, {...}] as [NamedStruct]` —
+            # promote each struct-literal element to the named type before
+            # the list-level homogeneity check. Missing fields fill from
+            # declared defaults (§3.2 v0.10), and each element takes on the
+            # nominal type, so homogeneity is satisfied by nominal identity
+            # even when elements specify different subsets of fields (the
+            # sparse-config idiom).
+            if inner_type_info and inner_type_info.get("kind") == "struct":
+                elements = []
+                for elem in node.expr.elements:
+                    if isinstance(elem, StructLiteral):
+                        synthetic = TypeAnnotation(
+                            expr=elem, type=node.type.inner,
+                            line=elem.line, col=elem.col,
+                        )
+                        elements.append(
+                            self._eval_type_annotation(synthetic, scope, exclude)
+                        )
+                    else:
+                        v = self._eval_node(elem, scope, exclude)
+                        if v is UzonUndefined:
+                            raise UzonTypeError(
+                                "List element is undefined",
+                                elem.line, elem.col, file=self._filename,
+                            )
+                        if v is not None:
+                            self._check_type_assertion(
+                                v, node.type.inner, node, scope,
+                            )
+                        elements.append(v)
+                self._check_list_homogeneity(elements, node)
+                return UzonTypedList(elements, node.type.inner.name)
+
         # Bypass i64 range check when target is a wider integer type
         if INT_TYPE_RE.match(node.type.name) and isinstance(node.expr, IntegerLiteral):
             value = int(node.expr.value, 0)
