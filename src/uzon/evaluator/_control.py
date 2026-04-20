@@ -14,7 +14,7 @@ from typing import Any
 from ..ast_nodes import (
     BinaryOp, FieldExtraction, FromEnum, FromUnion, Identifier,
     IfExpr, CaseExpr, MemberAccess, NamedVariant, Node,
-    StringLiteral, TypeAnnotation, UndefinedLiteral,
+    StringLiteral, TypeAnnotation, TypeExpr, UndefinedLiteral,
 )
 from ..errors import UzonRuntimeError, UzonTypeError
 from .._format import format_float as _format_float
@@ -497,6 +497,12 @@ class ControlMixin:
                 "'is type' requires a value, got undefined",
                 node.left.line, node.left.col, file=self._filename,
             )
+        # §5.2: compound RHS — [T], (T, U), nested. Delegate to
+        # TypeExpr-based matching used by ``as`` (§3.4, §3.3).
+        if isinstance(node.right, TypeExpr):
+            check_val = left.value if isinstance(left, (UzonUnion, UzonTaggedUnion)) else left
+            result = self._value_matches_type_strict(check_val, node.right.name)
+            return result if op == "is type" else not result
         if not isinstance(node.right, Identifier):
             raise UzonRuntimeError(
                 "'is type' requires a type name on the right",

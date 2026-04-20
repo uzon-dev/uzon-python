@@ -74,6 +74,19 @@ class Parser:
         TokenType.IDENTIFIER, TokenType.NULL, TokenType.STRUCT,
     })
 
+    def _parse_is_type_rhs(self) -> Node:
+        """§5.2: Parse the type on the right of ``is type`` / ``is not type``.
+
+        Accepts simple names, dotted paths, and compound types ([T], (T, U),
+        and nesting thereof). Simple/dotted names return an Identifier so
+        downstream evaluation preserves existing behavior; compound forms
+        return a TypeExpr.
+        """
+        if self._peek_type() in (TokenType.LBRACKET, TokenType.LPAREN):
+            return self._parse_type_expr()
+        n = self._expect_type_name()
+        return Identifier(name=n.value, line=n.line, col=n.col)
+
     def _expect_type_name(self) -> Token:
         """Expect a type name — IDENTIFIER or keyword that doubles as a type (e.g. null).
 
@@ -317,9 +330,8 @@ class Parser:
                             line=tok.line, col=tok.col)
         if tok.type == TokenType.IS_NOT_TYPE:
             self._advance()
-            n = self._expect_type_name()
-            return BinaryOp(op="is not type", left=left,
-                            right=Identifier(name=n.value, line=n.line, col=n.col),
+            rhs = self._parse_is_type_rhs()
+            return BinaryOp(op="is not type", left=left, right=rhs,
                             line=tok.line, col=tok.col)
         if tok.type == TokenType.IS_NAMED:
             self._advance()
@@ -329,9 +341,8 @@ class Parser:
                             line=tok.line, col=tok.col)
         if tok.type == TokenType.IS_TYPE:
             self._advance()
-            n = self._expect_type_name()
-            return BinaryOp(op="is type", left=left,
-                            right=Identifier(name=n.value, line=n.line, col=n.col),
+            rhs = self._parse_is_type_rhs()
+            return BinaryOp(op="is type", left=left, right=rhs,
                             line=tok.line, col=tok.col)
         if tok.type == TokenType.IS_NOT:
             self._advance()
