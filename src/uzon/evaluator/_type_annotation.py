@@ -372,8 +372,11 @@ class TypeAnnotationMixin:
             if isinstance(value, UzonInt) and value.type_name == name and not value.adoptable:
                 return value
             return UzonInt(int(value), name)
-        if name in FLOAT_TYPES and isinstance(value, float):
-            if isinstance(value, UzonFloat) and value.type_name == name and not value.adoptable:
-                return value
-            return UzonFloat(float(value), name)
+        if name in FLOAT_TYPES:
+            if isinstance(value, UzonInt) and value.adoptable:
+                return UzonFloat(float(int(value)), name)
+            if isinstance(value, float):
+                if isinstance(value, UzonFloat) and value.type_name == name and not value.adoptable:
+                    return value
+                return UzonFloat(float(value), name)
         return value

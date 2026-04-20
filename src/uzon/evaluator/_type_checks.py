@@ -119,7 +119,11 @@ class TypeChecksMixin:
                     node.line, node.col, file=self._filename,
                 )
             return
-        if not isinstance(value, float):
+        # §3.4 line 666 + §5 line 1577: adoptable integer literal may adopt
+        # a float type via integer-to-float promotion.
+        if isinstance(value, UzonInt) and value.adoptable:
+            return
+        if isinstance(value, bool) or not isinstance(value, float):
             raise UzonTypeError(
                 f"'as {type_name}' requires a float, got {self._type_name(value)}",
                 node.line, node.col, file=self._filename,

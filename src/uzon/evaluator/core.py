@@ -456,6 +456,24 @@ class Evaluator(
                         file=self._filename,
                     )
                 elements.append(v)
+            # §3.4 line 666: integer-to-float promotion in lists —
+            # `[1, 2.0]` is valid (both become f64). Pick target float type
+            # from the first typed float element, else f64 (default).
+            float_type = None
+            has_int = False
+            for v in elements:
+                if isinstance(v, UzonFloat):
+                    if float_type is None or (float_type == "f64" and not v.adoptable):
+                        float_type = v.type_name
+                elif isinstance(v, UzonInt) and v.adoptable:
+                    has_int = True
+            if float_type and has_int:
+                elements = [
+                    UzonFloat(float(int(v)), float_type, adoptable=v.adoptable)
+                    if isinstance(v, UzonInt) and v.adoptable
+                    else v
+                    for v in elements
+                ]
             self._check_list_homogeneity(elements, node)
             return elements
 
