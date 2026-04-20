@@ -75,11 +75,24 @@ class Parser:
     })
 
     def _expect_type_name(self) -> Token:
-        """Expect a type name — IDENTIFIER or keyword that doubles as a type (e.g. null)."""
+        """Expect a type name — IDENTIFIER or keyword that doubles as a type (e.g. null).
+
+        Supports dotted paths (e.g. ``m.Point``); the first segment is returned
+        as a Token whose value is the full dotted path — later consumers split on
+        ``.`` to recover the path. Only IDENTIFIER segments may follow a dot.
+        """
         tok = self._peek()
-        if tok.type in self._TYPE_NAME_TOKENS:
-            return self._advance()
-        raise self._error(f"Expected type name, got {tok.type.name} ({tok.value!r})")
+        if tok.type not in self._TYPE_NAME_TOKENS:
+            raise self._error(f"Expected type name, got {tok.type.name} ({tok.value!r})")
+        first = self._advance()
+        if self._peek_type() != TokenType.DOT:
+            return first
+        segments = [first.value]
+        while self._peek_type() == TokenType.DOT:
+            self._advance()
+            seg = self._expect(TokenType.IDENTIFIER)
+            segments.append(seg.value)
+        return Token(TokenType.IDENTIFIER, ".".join(segments), first.line, first.col)
 
     def _error(self, msg: str) -> UzonSyntaxError:
         tok = self._peek()

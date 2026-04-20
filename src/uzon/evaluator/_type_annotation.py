@@ -40,7 +40,11 @@ class TypeAnnotationMixin:
                 binding.line, binding.col,
                 file=self._filename,
             )
-        type_info: dict[str, Any] = {"name": type_name, "binding": binding.name}
+        # §7.3: qual_id distinguishes same-named types across files.
+        qual_id = f"{self._filename}#{type_name}"
+        type_info: dict[str, Any] = {
+            "name": type_name, "binding": binding.name, "qual_id": qual_id,
+        }
         if isinstance(value, UzonEnum):
             type_info["kind"] = "enum"
             type_info["variants"] = value.variants
@@ -70,6 +74,7 @@ class TypeAnnotationMixin:
             if old_id != id(value) and old_id in self._scope_of:
                 self._scope_of[id(value)] = self._scope_of.pop(old_id)
             self._called_of[id(value)] = type_name
+            self._qual_of[id(value)] = qual_id
         elif isinstance(value, list):
             type_info["kind"] = "list"
             self._called_of[id(value)] = type_name
@@ -80,11 +85,14 @@ class TypeAnnotationMixin:
                     if old_elem_id in self._scope_of:
                         self._scope_of[id(value[i])] = self._scope_of.pop(old_elem_id)
                     self._called_of[id(value[i])] = type_name
+                    self._qual_of[id(value[i])] = qual_id
                 elif isinstance(elem, UzonStruct):
                     elem.type_name = type_name
                     self._called_of[id(elem)] = type_name
+                    self._qual_of[id(elem)] = qual_id
                 elif isinstance(elem, dict):
                     self._called_of[id(elem)] = type_name
+                    self._qual_of[id(elem)] = qual_id
         else:
             type_info["kind"] = "value"
         scope.define_type(type_name, type_info)

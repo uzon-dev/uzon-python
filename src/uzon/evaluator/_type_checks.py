@@ -197,14 +197,26 @@ class TypeChecksMixin:
                 f"'as {type_name}' requires a struct, got {self._type_name(value)}",
                 node.line, node.col, file=self._filename,
             )
-        # §3.2.1 rule 5 / §6.3: nominal identity — a value already named
-        # as a different struct type cannot be re-asserted as another.
+        # §3.2.1 rule 5 / §6.3 / §7.3: nominal identity — a value already
+        # named as a different struct type (possibly from another file)
+        # cannot be re-asserted as this one. Prefer qualified IDs so
+        # same-named types from different files stay distinct.
+        decl_name = type_info.get("name", type_name)
+        decl_qual = type_info.get("qual_id")
+        existing_qual = self._qual_of.get(id(value))
         existing_name = None
         if isinstance(value, UzonStruct) and value.type_name:
             existing_name = value.type_name
         else:
             existing_name = self._called_of.get(id(value))
-        if existing_name and existing_name != type_name:
+        if existing_qual and decl_qual and existing_qual != decl_qual:
+            raise UzonTypeError(
+                f"'as {type_name}' type mismatch: value is "
+                f"{existing_name or existing_qual} "
+                "(nominal identity — separately named struct types are incompatible)",
+                node.line, node.col, file=self._filename,
+            )
+        if (not existing_qual) and existing_name and existing_name != decl_name:
             raise UzonTypeError(
                 f"'as {type_name}' type mismatch: value is {existing_name} "
                 "(nominal identity — separately named struct types are incompatible)",
@@ -240,8 +252,10 @@ class TypeChecksMixin:
                             node.line, node.col, file=self._filename,
                         )
         if isinstance(value, UzonStruct):
-            value.type_name = type_name
-        self._called_of[id(value)] = type_name
+            value.type_name = decl_name
+        self._called_of[id(value)] = decl_name
+        if decl_qual:
+            self._qual_of[id(value)] = decl_qual
 
     def _check_function_assertion(
         self, value: Any, type_name: str, type_info: dict, node: Node
@@ -499,6 +513,14 @@ class TypeChecksMixin:
             return all(x is None or y is None or self._same_uzon_type(x, y, for_homogeneity=for_homogeneity)
                        for x, y in zip(a, b))
         if isinstance(a, dict) and isinstance(b, dict):
+            # §7.3: prefer qualified IDs so same-named struct types from
+            # different files compare as distinct.
+            a_qual = self._qual_of.get(id(a))
+            b_qual = self._qual_of.get(id(b))
+            if a_qual and b_qual:
+                return a_qual == b_qual
+            if a_qual or b_qual:
+                return False
             a_type = a.type_name if isinstance(a, UzonStruct) else self._called_of.get(id(a))
             b_type = b.type_name if isinstance(b, UzonStruct) else self._called_of.get(id(b))
             if a_type and b_type:

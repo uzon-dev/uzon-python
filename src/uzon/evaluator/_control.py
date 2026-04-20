@@ -490,7 +490,7 @@ class ControlMixin:
 
     # ── is type (§5.2) ─────────────────────────────────────────────
 
-    def _eval_is_type(self, op: str, left: Any, node: BinaryOp) -> bool:
+    def _eval_is_type(self, op: str, left: Any, node: BinaryOp, scope: Scope) -> bool:
         """§5.2: Evaluate `value is type T` / `value is not type T`."""
         if left is UzonUndefined:
             raise UzonRuntimeError(
@@ -503,6 +503,24 @@ class ControlMixin:
                 node.line, node.col, file=self._filename,
             )
         type_name = node.right.name
+        # §7.3: dotted paths (e.g. `m.Point`) resolve through module
+        # scopes. When the resolved type carries a qualified id, compare
+        # that against the value's qual_id for cross-file identity.
+        if "." in type_name:
+            from ..ast_nodes import TypeExpr as _TypeExpr
+            path = type_name.split(".")
+            te = _TypeExpr(
+                name=type_name, path=path,
+                line=node.right.line, col=node.right.col,
+            )
+            type_info = self._resolve_named_type(te, scope, node)
+            if type_info is None:
+                raise UzonTypeError(
+                    f"Unknown type '{type_name}' in 'is type'",
+                    node.right.line, node.right.col, file=self._filename,
+                )
+            result = self._value_matches_type_info(left, type_info)
+            return result if op == "is type" else not result
         # §5.2: For unions (tagged or untagged), check inner value's type
         if isinstance(left, (UzonUnion, UzonTaggedUnion)):
             check_val = left.value
@@ -511,3 +529,15 @@ class ControlMixin:
             # §5.2: is type on non-union checks concrete type
             result = self._value_matches_type_strict(left, type_name)
         return result if op == "is type" else not result
+
+    def _value_matches_type_info(self, value: Any, type_info: dict) -> bool:
+        """§7.3: Match a value against a resolved type_info dict, using
+        qualified identity when the value carries a qual_id."""
+        decl_qual = type_info.get("qual_id")
+        decl_name = type_info.get("name", "")
+        val_qual = self._qual_of.get(id(value))
+        if val_qual and decl_qual:
+            return val_qual == decl_qual
+        if val_qual or decl_qual:
+            return False
+        return self._value_matches_type_strict(value, decl_name)

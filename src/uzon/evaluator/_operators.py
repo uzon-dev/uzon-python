@@ -104,7 +104,7 @@ class OperatorMixin:
         # §5.2: is type / is not type
         if op in ("is type", "is not type"):
             left = self._eval_node(node.left, scope, exclude)
-            return self._eval_is_type(op, left, node)
+            return self._eval_is_type(op, left, node, scope)
 
         # §5.8: `in` — evaluate right first for enum variant inference
         if op == "in":

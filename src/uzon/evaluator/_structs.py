@@ -213,6 +213,9 @@ class StructMixin:
             base_type = self._called_of.get(id(base))
             if base_type:
                 self._called_of[id(result)] = base_type
+        base_qual = self._qual_of.get(id(base))
+        if base_qual:
+            self._qual_of[id(result)] = base_qual
         # Propagate scope from base so nested type defs remain accessible
         base_scope = self._scope_of.get(id(base))
         if base_scope:

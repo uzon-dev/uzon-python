@@ -59,6 +59,10 @@ class Evaluator(
         self._import_stack: list[str] = []  # §7.2: circular import detection
         self._scope_of: dict[int, Scope] = {}   # id(result_dict) → Scope
         self._called_of: dict[int, str] = {}    # id(result_dict) → type_name (§6.2)
+        # §7.3: id(value) → qualified type id "{file}#{name}" for
+        # cross-file nominal identity. Values without a declared type,
+        # and anonymous structs, have no entry.
+        self._qual_of: dict[int, str] = {}
         self._call_stack: list[int] = []  # §3.8: recursion detection
         self._collected_errors: list = []  # multi-error collection
         # §3.5 R7 v0.10: stack of {field_name: enum_type_info} for bare
