@@ -133,6 +133,11 @@ class StructMixin:
         §3.5 Rule 4: a local binding in the enclosing scope with the
         same name as the variant wins — skip the rewrite so normal
         identifier lookup returns the binding's value.
+
+        Hint shapes handled:
+          - enum: rewrite bare identifier in variants → `name as Enum`.
+          - union: if the variant name appears in multiple member enums,
+            raise ambiguity; if in exactly one, rewrite to that enum.
         """
         from dataclasses import replace
         from ..ast_nodes import TypeAnnotation, TypeExpr
@@ -145,14 +150,38 @@ class StructMixin:
             if hint is None or not isinstance(field.value, Identifier):
                 new_fields.append(field)
                 continue
-            vname = field.value.name
-            if vname not in hint["variants"]:
-                new_fields.append(field)
-                continue
+            ident = field.value
+            vname = ident.name
             if scope.has(vname):
                 new_fields.append(field)
                 continue
-            ident = field.value
+
+            if hint.get("kind") == "union":
+                matching = [m for m in hint["members"] if vname in m["variants"]]
+                if not matching:
+                    new_fields.append(field)
+                    continue
+                if len(matching) > 1:
+                    names = ", ".join(m["name"] for m in matching)
+                    raise UzonTypeError(
+                        f"Bare variant '{vname}' is ambiguous under "
+                        f"union {hint['name']} — variant declared by "
+                        f"{names}. Qualify with the specific enum, "
+                        f"e.g., `{matching[0]['name']}.{vname}`.",
+                        ident.line, ident.col, file=self._filename,
+                    )
+                picked = matching[0]
+                wrapped = TypeAnnotation(
+                    expr=ident,
+                    type=TypeExpr(name=picked["name"], line=ident.line, col=ident.col),
+                    line=ident.line, col=ident.col,
+                )
+                new_fields.append(replace(field, value=wrapped))
+                continue
+
+            if vname not in hint["variants"]:
+                new_fields.append(field)
+                continue
             wrapped = TypeAnnotation(
                 expr=ident,
                 type=TypeExpr(name=hint["name"], line=ident.line, col=ident.col),

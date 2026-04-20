@@ -11,7 +11,8 @@ from typing import Any
 
 from ..ast_nodes import (
     AreBinding, Binding, Identifier, IntegerLiteral, ListLiteral,
-    NamedVariant, Node, StructLiteral, TypeAnnotation, TypeExpr,
+    NamedVariant, Node, StandaloneStruct, StructLiteral, TypeAnnotation,
+    TypeExpr,
 )
 from ..errors import UzonSyntaxError, UzonTypeError
 from ..scope import Scope
@@ -65,6 +66,7 @@ class TypeAnnotationMixin:
             type_info["kind"] = "struct"
             type_info["fields"] = set(value.keys())
             type_info["field_values"] = dict(value)
+            type_info["field_types"] = self._extract_struct_field_types(binding)
             old_id = id(value)
             if not isinstance(value, UzonStruct):
                 value = UzonStruct(value, type_name)
@@ -119,7 +121,7 @@ class TypeAnnotationMixin:
         # pushed hints; on any abrupt path we defensively clean up.
         if (type_info and type_info.get("kind") == "struct"
                 and isinstance(node.expr, StructLiteral)):
-            hints = self._struct_field_enum_hints(type_info)
+            hints = self._struct_field_enum_hints(type_info, scope)
             if hints:
                 depth = len(self._field_enum_hints_stack)
                 self._field_enum_hints_stack.append(hints)
@@ -257,16 +259,72 @@ class TypeAnnotationMixin:
                     return UzonFloat(float(value), mt)
         return value
 
-    def _struct_field_enum_hints(self, type_info: dict) -> dict[str, dict]:
-        """Return {field_name: enum_type_info} for struct fields declared
-        with an enum type — used to resolve bare variants in struct
-        literals per §3.5 R7 v0.10.
+    @staticmethod
+    def _extract_struct_field_types(
+        binding: Binding | AreBinding,
+    ) -> dict[str, TypeExpr]:
+        """Capture each struct field's declared TypeExpr from the `as T`
+        annotation on its default. Used by §3.5 R7 to detect fields whose
+        declared type is a named union.
+        """
+        value = getattr(binding, "value", None)
+        if isinstance(value, StandaloneStruct):
+            value = value.struct
+        if not isinstance(value, StructLiteral):
+            return {}
+        field_types: dict[str, TypeExpr] = {}
+        for f in value.fields:
+            if isinstance(f, Binding) and isinstance(f.value, TypeAnnotation):
+                field_types[f.name] = f.value.type
+        return field_types
+
+    def _struct_field_enum_hints(
+        self, type_info: dict, scope: Scope,
+    ) -> dict[str, dict]:
+        """Return per-field hints for resolving bare variants inside a
+        struct literal (§3.5 R7 v0.10).
+
+        Hint shape:
+          - ``{"kind": "enum", "name": EnumType, "variants": {...}}``
+            for fields declared with a single enum type.
+          - ``{"kind": "union", "name": UnionType, "members": [...]}``
+            for fields declared with a union whose members are enums.
+            Each entry is ``{"name": EnumType, "variants": {...}}``.
         """
         hints: dict[str, dict] = {}
         field_values = type_info.get("field_values", {})
+        field_types: dict[str, TypeExpr] = type_info.get("field_types", {})
+
+        for fname, ftype in field_types.items():
+            if ftype.is_list or ftype.is_tuple:
+                continue
+            info = scope.get_type(ftype.name)
+            if info is None:
+                continue
+            if info.get("kind") == "union":
+                members: list[dict] = []
+                for mt in info.get("types", []):
+                    minfo = scope.get_type(mt)
+                    if minfo and minfo.get("kind") == "enum":
+                        members.append({
+                            "name": minfo["name"],
+                            "variants": minfo["variants"],
+                        })
+                if members:
+                    hints[fname] = {
+                        "kind": "union",
+                        "name": info["name"],
+                        "members": members,
+                    }
+
+        # Fallback/augment from resolved default values for fields that do
+        # not carry an explicit `as` annotation but default to an enum.
         for fname, fval in field_values.items():
+            if fname in hints:
+                continue
             if isinstance(fval, UzonEnum) and fval.type_name:
                 hints[fname] = {
+                    "kind": "enum",
                     "name": fval.type_name,
                     "variants": fval.variants,
                 }
