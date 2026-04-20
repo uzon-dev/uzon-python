@@ -116,19 +116,23 @@ class StructMixin:
         hints = self._field_enum_hints_stack.pop() if self._field_enum_hints_stack else None
         fields = node.fields
         if hints:
-            fields = self._rewrite_bare_enum_fields(fields, hints)
+            fields = self._rewrite_bare_enum_fields(fields, hints, scope)
         self._evaluate_bindings(fields, child_scope, struct_context=True)
         result = child_scope.to_dict()
         self._scope_of[id(result)] = child_scope
         return result
 
     def _rewrite_bare_enum_fields(
-        self, fields: list, hints: dict[str, dict],
+        self, fields: list, hints: dict[str, dict], scope: Scope,
     ) -> list:
         """§3.5 R7 v0.10: Replace each Binding whose value is a bare
         Identifier matching a hinted enum variant with a copy whose
         value is wrapped in a TypeAnnotation. Non-matching fields pass
         through unchanged.
+
+        §3.5 Rule 4: a local binding in the enclosing scope with the
+        same name as the variant wins — skip the rewrite so normal
+        identifier lookup returns the binding's value.
         """
         from dataclasses import replace
         from ..ast_nodes import TypeAnnotation, TypeExpr
@@ -143,6 +147,9 @@ class StructMixin:
                 continue
             vname = field.value.name
             if vname not in hint["variants"]:
+                new_fields.append(field)
+                continue
+            if scope.has(vname):
                 new_fields.append(field)
                 continue
             ident = field.value
