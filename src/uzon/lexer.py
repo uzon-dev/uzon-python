@@ -576,6 +576,11 @@ class Lexer:
                 break
             if ch == "/" and self._peek_at(1) == "/":
                 break
+            cp = ord(ch)
+            if cp in (0x200E, 0x200F) or 0x202A <= cp <= 0x202E or 0x2066 <= cp <= 0x2069:
+                raise self._error(
+                    f"RTL/bidi mark U+{cp:04X} is not allowed outside string literals (§2.3)"
+                )
             word += self._advance()
         return word
 
