@@ -263,6 +263,12 @@ class OperatorMixin:
 
     def _eval_is(self, left: Any, right: Any, node: Node) -> bool:
         """§5.2: Equality comparison."""
+        # §5.2 universal null/undefined exemption: `is`/`is not` against null or
+        # undefined is permitted for any value, including functions (§3.8).
+        if left is None or right is None:
+            return left is None and right is None
+        if left is UzonUndefined or right is UzonUndefined:
+            return left is UzonUndefined and right is UzonUndefined
         if isinstance(left, (UzonFunction, UzonBuiltinFunction)) or isinstance(right, (UzonFunction, UzonBuiltinFunction)):
             raise UzonTypeError(
                 "Cannot compare function values with 'is' / 'is not'",
