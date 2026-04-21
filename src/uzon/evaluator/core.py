@@ -92,8 +92,10 @@ class Evaluator(
     # ── static checks ─────────────────────────────────────────────────
 
     def _check_empty_list_annotations(self, node: Any, wrapped: bool = False) -> None:
-        """§6.1: Every empty ``[]`` literal must be directly wrapped by
-        ``as [Type]``. Enforced as a static AST check before evaluation.
+        """§3.4 / §6.1: An empty ``[]`` literal must have a determinable element
+        type — either directly via ``as [T]``, via an outer ``as [T]`` wrapping
+        an ``if``/``case`` expression, or via a typed sibling branch. Enforced
+        as a static AST check before evaluation.
         """
         if isinstance(node, ListLiteral) and not node.elements and not wrapped:
             raise UzonTypeError(
@@ -102,8 +104,29 @@ class Evaluator(
             )
         if isinstance(node, TypeAnnotation):
             self._check_empty_list_annotations(
-                node.expr, wrapped=bool(node.type and node.type.is_list)
+                node.expr, wrapped=bool(node.type and node.type.is_list),
             )
+            return
+        if isinstance(node, IfExpr):
+            self._check_empty_list_annotations(node.condition, wrapped=False)
+            branches = [node.then_branch, node.else_branch]
+            inner = wrapped or any(
+                self._branch_supplies_list_type(b) for b in branches
+            )
+            for b in branches:
+                self._check_empty_list_annotations(b, wrapped=inner)
+            return
+        if isinstance(node, CaseExpr):
+            self._check_empty_list_annotations(node.scrutinee, wrapped=False)
+            for clause in node.when_clauses:
+                self._check_empty_list_annotations(clause.value, wrapped=False)
+            branches = [clause.result for clause in node.when_clauses]
+            branches.append(node.else_branch)
+            inner = wrapped or any(
+                self._branch_supplies_list_type(b) for b in branches
+            )
+            for b in branches:
+                self._check_empty_list_annotations(b, wrapped=inner)
             return
         if isinstance(node, list):
             for item in node:
@@ -112,6 +135,28 @@ class Evaluator(
         if isinstance(node, Node):
             for fname in getattr(node, "__dataclass_fields__", {}):
                 self._check_empty_list_annotations(getattr(node, fname))
+
+    def _branch_supplies_list_type(self, node: Any) -> bool:
+        """§3.4: Does this branch produce a list with a determinable element
+        type? A non-empty list literal, an ``as [T]``-annotated expression, or
+        any expression other than a bare empty list or a nested if/case tree
+        of empty lists qualifies.
+        """
+        if isinstance(node, ListLiteral):
+            return bool(node.elements)
+        if isinstance(node, TypeAnnotation):
+            if node.type and node.type.is_list:
+                return True
+            return self._branch_supplies_list_type(node.expr)
+        if isinstance(node, IfExpr):
+            return (self._branch_supplies_list_type(node.then_branch)
+                    or self._branch_supplies_list_type(node.else_branch))
+        if isinstance(node, CaseExpr):
+            for clause in node.when_clauses:
+                if self._branch_supplies_list_type(clause.result):
+                    return True
+            return self._branch_supplies_list_type(node.else_branch)
+        return True
 
     def _check_undefined_literals(self, node: Any) -> None:
         """§3.1: Literal ``undefined`` may only appear as an operand of
