@@ -1,6 +1,6 @@
 # uzon
 
-A Python parser and generator for the [UZON](https://uzon.dev) typed data expression format — spec v0.7.
+A Python parser and generator for [UZON](https://uzon.dev), a typed configuration language.
 
 ```python
 import uzon
@@ -18,7 +18,7 @@ print(data["server"]["port"])   # UzonInt(8080, 'u16')
 
 ```python
 >>> uzon.__version__
-'0.10.0'
+'0.10.1'
 ```
 
 ## Installation
