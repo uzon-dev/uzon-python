@@ -191,7 +191,7 @@ class Lexer:
                 line, col = self._line, self._col
             elif ch in ("\n", "\r"):
                 raise self._error("Unterminated string literal")
-            elif ord(ch) < 0x20:
+            elif ord(ch) < 0x20 or ord(ch) == 0x7F:
                 raise self._error(
                     f"Control character U+{ord(ch):04X} not allowed in string"
                     " — use an escape sequence"
@@ -255,6 +255,11 @@ class Lexer:
                 return
             if ch in ("\n", "\r"):
                 raise self._error("Unterminated string literal in interpolation")
+            if ord(ch) < 0x20 or ord(ch) == 0x7F:
+                raise self._error(
+                    f"Control character U+{ord(ch):04X} not allowed in string"
+                    " — use an escape sequence"
+                )
             buf.append(self._advance())
         raise self._error("Unterminated string literal in interpolation")
 
@@ -580,6 +585,11 @@ class Lexer:
             if cp in (0x200E, 0x200F) or 0x202A <= cp <= 0x202E or 0x2066 <= cp <= 0x2069:
                 raise self._error(
                     f"RTL/bidi mark U+{cp:04X} is not allowed outside string literals (§2.3)"
+                )
+            if cp == 0xFEFF:
+                raise self._error(
+                    "Mid-file byte order mark (U+FEFF) is not allowed outside "
+                    "string literals and comments (§2.1)"
                 )
             word += self._advance()
         return word
