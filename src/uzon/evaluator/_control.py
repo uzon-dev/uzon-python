@@ -140,16 +140,70 @@ class ControlMixin:
                 f"'if' condition must be bool, got {self._type_name(cond)}",
                 node.line, node.col, file=self._filename,
             )
+        # §5.9: Branch narrowing — simple condition on a bare identifier
+        # narrows the scrutinee in the matching branch. Inverse forms
+        # (is not type / is not named / is null / is undefined) swap then/else.
+        then_scope, else_scope, narrowed = self._narrow_if_scopes(
+            node.condition, scope,
+        )
+        spec = (
+            self._speculative_eval_narrowed if narrowed else self._speculative_eval
+        )
         if cond:
-            result = self._eval_node(node.then_branch, scope, exclude)
-            other = self._speculative_eval(node.else_branch, scope, exclude)
+            result = self._eval_node(node.then_branch, then_scope, exclude)
+            other = spec(node.else_branch, else_scope, exclude)
         else:
-            result = self._eval_node(node.else_branch, scope, exclude)
-            other = self._speculative_eval(node.then_branch, scope, exclude)
+            result = self._eval_node(node.else_branch, else_scope, exclude)
+            other = spec(node.then_branch, then_scope, exclude)
 
         if other is not SPECULATIVE_FAILED:
             self._check_branch_type_compat([result, other], node)
         return result
+
+    def _narrow_if_scopes(
+        self, condition: Node, scope: Scope,
+    ) -> tuple[Scope, Scope, bool]:
+        """§5.9: Produce (then_scope, else_scope, narrowed) for a simple
+        `is`/`is not`/`is type`/`is named` condition on a bare identifier.
+
+        When the scrutinee is a UzonUnion or UzonTaggedUnion whose inner
+        value is revealed by the condition (is type / is named / is null /
+        is not null and their inverses), substitute the bare name with the
+        inner value in both branches — the concrete value is identical in
+        both the selected branch and the non-selected (speculative) branch.
+        """
+        if not isinstance(condition, BinaryOp):
+            return scope, scope, False
+        if not isinstance(condition.left, Identifier):
+            return scope, scope, False
+        name = condition.left.name
+        if not scope.has(name):
+            return scope, scope, False
+        value = scope.get(name)
+        op = condition.op
+
+        narrows = False
+        if op in ("is type", "is not type") and isinstance(
+            value, (UzonUnion, UzonTaggedUnion),
+        ):
+            narrows = True
+        elif op in ("is named", "is not named") and isinstance(
+            value, UzonTaggedUnion,
+        ):
+            narrows = True
+        elif op in ("is", "is not"):
+            from ..ast_nodes import NullLiteral as _NullLiteral
+            if isinstance(condition.right, _NullLiteral) and isinstance(
+                value, (UzonUnion, UzonTaggedUnion),
+            ):
+                narrows = True
+
+        if not narrows:
+            return scope, scope, False
+
+        narrowed = Scope(parent=scope)
+        narrowed.define(name, value.value)
+        return narrowed, narrowed, True
 
     # ── case/when (§5.10) ────────────────────────────────────────────
 
