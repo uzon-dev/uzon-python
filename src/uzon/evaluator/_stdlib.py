@@ -330,7 +330,10 @@ class StdlibMixin:
                 f"std.lower expects a string, got {self._type_name(s)}",
                 node.line, node.col, file=self._filename,
             )
-        return s.lower()
+        # §5.16.6: Unicode simple one-to-one Lowercase_Mapping; skip codepoints
+        # whose Python lower() expands to multiple codepoints (e.g. none for
+        # lower, but keep symmetric with upper).
+        return "".join(ch.lower() if len(ch.lower()) == 1 else ch for ch in s)
 
     def _std_upper(self, args: list, node: Node) -> str:
         s = args[0]
@@ -339,7 +342,9 @@ class StdlibMixin:
                 f"std.upper expects a string, got {self._type_name(s)}",
                 node.line, node.col, file=self._filename,
             )
-        return s.upper()
+        # §5.16.6: Unicode simple one-to-one Uppercase_Mapping; skip codepoints
+        # whose Python upper() expands to multiple codepoints (e.g. `ß` → `SS`).
+        return "".join(ch.upper() if len(ch.upper()) == 1 else ch for ch in s)
 
     # ── new collection functions (§5.16) ────────────────────────────
 
