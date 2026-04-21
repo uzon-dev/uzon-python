@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..ast_nodes import FunctionCall, FunctionExpr, Node
+from ..ast_nodes import FunctionCall, FunctionExpr, Identifier, Node
 from ..errors import UzonCircularError, UzonRuntimeError, UzonTypeError
 from ..scope import Scope
 from ..types import (
@@ -34,7 +34,12 @@ class FunctionMixin:
             self._validate_type_name(param.type, node, scope)
             default = None
             if param.default is not None:
-                default = self._eval_node(param.default, scope, exclude)
+                # §3.5 Rule 4 (v0.11): when the parameter type is a named enum,
+                # a bare variant name in the default position resolves to that
+                # variant without requiring `as EnumType`.
+                default = self._eval_default_with_enum_hint(
+                    param.default, param.type, scope, exclude,
+                )
                 # §3.8: default value must be defined and match the param type
                 if default is UzonUndefined:
                     raise UzonTypeError(
@@ -92,8 +97,14 @@ class FunctionMixin:
                 node.line, node.col, file=self._filename,
             )
 
-        args = [self._eval_node(a, scope, exclude) for a in node.args]
         func = callee
+        # §3.5 Rule 4: if a parameter type is a named enum, a bare variant
+        # name at the corresponding argument position resolves to that
+        # variant without requiring `as EnumType`.
+        args: list[Any] = []
+        for i, arg in enumerate(node.args):
+            ptype = func.params[i][1] if i < len(func.params) else None
+            args.append(self._eval_arg_with_enum_hint(arg, ptype, scope, exclude))
         self._check_arg_count(func, args, node)
 
         # §3.8: Two-level scope for function bodies
@@ -123,6 +134,39 @@ class FunctionMixin:
 
         self._check_return_type(result, func.return_type, node)
         return result
+
+    def _eval_arg_with_enum_hint(
+        self, arg_expr: Node, param_type: str | None, scope: Scope,
+        exclude: str | None,
+    ) -> Any:
+        """§3.5 Rule 4: resolve a bare variant in an argument position
+        against the parameter's declared enum type."""
+        if isinstance(arg_expr, Identifier) and param_type \
+                and not param_type.startswith(("[", "(")):
+            type_info = scope.get_type(param_type)
+            if (type_info and type_info.get("kind") == "enum"
+                    and arg_expr.name in type_info["variants"]
+                    and not scope.has(arg_expr.name)):
+                return UzonEnum(
+                    arg_expr.name, type_info["variants"], type_info["name"],
+                )
+        return self._eval_node(arg_expr, scope, exclude)
+
+    def _eval_default_with_enum_hint(
+        self, default_expr: Node, param_type: Any, scope: Scope, exclude: str | None,
+    ) -> Any:
+        """§3.5 Rule 4 (v0.11): resolve a bare variant in a default expression
+        against the parameter's declared enum type."""
+        if isinstance(default_expr, Identifier) and not param_type.is_list \
+                and not param_type.is_tuple:
+            type_info = scope.get_type(param_type.name)
+            if (type_info and type_info.get("kind") == "enum"
+                    and default_expr.name in type_info["variants"]
+                    and not scope.has(default_expr.name)):
+                return UzonEnum(
+                    default_expr.name, type_info["variants"], type_info["name"],
+                )
+        return self._eval_node(default_expr, scope, exclude)
 
     def _eval_body_with_return_hint(
         self, body_expr: Any, return_type: str, scope: Scope,
