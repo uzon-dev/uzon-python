@@ -170,6 +170,11 @@ class TypeChecksMixin:
                 node.line, node.col, file=self._filename,
             )
         if kind == "tagged_union":
+            # §6.3 + §7.3: re-annotating an already-tagged value with its own
+            # type is a no-op (identity-preserving). Only require `named` when
+            # the value is not already the same tagged-union type.
+            if isinstance(value, UzonTaggedUnion) and value.type_name == type_info.get("name"):
+                return
             raise UzonTypeError(
                 f"'as {type_name}' requires 'named' to specify the active variant",
                 node.line, node.col, file=self._filename,
